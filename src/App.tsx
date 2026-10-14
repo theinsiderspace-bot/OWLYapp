@@ -12,6 +12,7 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { AuthModal, AuthModalMode } from './components/AuthModal';
 import { OwlyBrand } from './components/OwlyBrand';
 import { EcosystemLaunchers } from './components/EcosystemLaunchers';
+import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { 
   ShieldCheck, 
   GraduationCap, 
@@ -24,7 +25,7 @@ import {
 function LMSAppContent() {
   const { currentUser, isUserEnrolled } = useLms();
 
-  const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy'>('catalog');
   const [selectedCourseForDetails, setSelectedCourseForDetails] = useState<Course | null>(null);
   const [selectedCourseForCheckout, setSelectedCourseForCheckout] = useState<Course | null>(null);
   const [activeLearningCourse, setActiveLearningCourse] = useState<Course | null>(null);
@@ -111,6 +112,10 @@ function LMSAppContent() {
         {activeTab === 'admin' && (
           <AdminDashboard />
         )}
+
+        {activeTab === 'privacy' && (
+          <PrivacyPolicyPage onBack={() => { setActiveTab('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+        )}
       </main>
 
       {/* Course Details Syllabus Modal */}
@@ -165,18 +170,24 @@ function LMSAppContent() {
               <EcosystemLaunchers variant="footer" className="hidden sm:flex" />
             </div>
 
-            <div className="flex items-center gap-6 text-xs text-slate-500 font-medium">
-              <button onClick={() => setActiveTab('catalog')} className="hover:text-slate-900 transition-colors">
+            <div className="flex flex-wrap items-center gap-6 text-xs text-slate-500 font-medium">
+              <button 
+                onClick={() => { setActiveTab('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'catalog' ? 'text-indigo-600 font-semibold' : ''}`}
+              >
                 Course Catalog
               </button>
-              <button onClick={() => setActiveTab('learning')} className="hover:text-slate-900 transition-colors">
+              <button 
+                onClick={() => { setActiveTab('learning'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'learning' ? 'text-indigo-600 font-semibold' : ''}`}
+              >
                 My Learning
               </button>
-              <button onClick={() => setActiveTab('teacher')} className="hover:text-slate-900 transition-colors">
-                Teacher Studio
-              </button>
-              <button onClick={() => setActiveTab('admin')} className="hover:text-slate-900 transition-colors">
-                Admin Console
+              <button 
+                onClick={() => { setActiveTab('privacy'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'privacy' ? 'text-indigo-600 font-semibold' : ''}`}
+              >
+                Privacy Policy
               </button>
             </div>
 
