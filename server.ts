@@ -116,10 +116,10 @@ app.post('/api/billing-ai/forecast', async (req: Request, res: Response) => {
   try {
     const { courses, currentGross, royaltyPercentage } = req.body;
     const gross = currentGross || 42000;
-    const royalty = royaltyPercentage || 85;
+    const royalty = royaltyPercentage || 70;
 
     if (aiClient && process.env.GEMINI_API_KEY) {
-      const prompt = `As a venture financial analyst, forecast future revenue for an educator LMS with $${gross} current gross sales and an ${royalty}% royalty payout share.
+      const prompt = `As a venture financial analyst, forecast future revenue for an educator LMS with $${gross} current gross sales and a ${royalty}% royalty payout share (platform retains 30%).
 Catalog has ${courses?.length || 4} technical engineering courses.
 Return ONLY valid JSON in this exact structure:
 {
@@ -192,14 +192,14 @@ app.post('/api/billing-ai/copilot', async (req: Request, res: Response) => {
     if (aiClient && process.env.GEMINI_API_KEY) {
       const prompt = `You are the AI Financial & Billing Advisor inside Aetheria LMS, advising a university professor / senior technical educator.
 Educator profile:
-- Royalty share: ${educatorContext?.royaltyPercentage || 85}%
+- Royalty share: ${educatorContext?.royaltyPercentage || 70}% (Platform retains 30% system fee)
 - Payout method: Stripe Direct Deposit
 - Available balance: $${educatorContext?.availablePayout || 12850}
 - Active courses: ${educatorContext?.courseCount || 4}
 
 Educator Question: "${question}"
 
-Provide a concise, practical, highly articulate answer tailored to online course monetization, pricing elasticity, corporate licensing, and tax remittance. Use bullet points and clear takeaways.`;
+Provide a concise, practical, highly articulate answer tailored to online course monetization, lecture fee calibration, pricing elasticity, corporate licensing, and tax remittance. Use bullet points and clear takeaways.`;
 
       const aiResponse = await aiClient.models.generateContent({
         model: 'gemini-3.8-flash',
@@ -213,8 +213,9 @@ Provide a concise, practical, highly articulate answer tailored to online course
     }
 
     // Heuristic response
-    let reply = `Based on your course performance metrics and current 85% royalty payout tier:
+    let reply = `Based on your course performance metrics and current 70% royalty payout tier (30% system retention):
 • **Pricing Elasticity**: Your courses carry an average 4.9+ rating. In technical education, courses priced between $249 and $299 experience almost identical conversion rates to those priced below $200 because professional learners frequently expense their enrollment through corporate learning budgets.
+• **Lecture Fee Monetization**: Setting live lecture fees around $75-$120 per session yields strong student attendance while yielding $52.50-$84.00 net per attendee after the standard 30% system infrastructure retention.
 • **Bundling Advantage**: Introducing a 2-course masterclass bundle (e.g., Distributed Systems + AI Engineering) at $399 can lift average order value (AOV) by ~28%.
 • **Live Cohort Lift**: Hosting scheduled Google Meet office hours and code review sessions allows you to introduce a "Cohort VIP" tier with an additional $150 premium.`;
 
@@ -230,7 +231,7 @@ app.post('/api/billing-ai/tax-invoice', async (req: Request, res: Response) => {
   try {
     const { instructorName, period, grossEarnings, royaltyPercent } = req.body;
     const gross = grossEarnings || 16750;
-    const royalty = royaltyPercent || 85;
+    const royalty = royaltyPercent || 70;
     const instructorShare = (gross * royalty) / 100;
     const platformFee = gross - instructorShare;
     const stripeFee = Math.round(gross * 0.029 * 100) / 100;

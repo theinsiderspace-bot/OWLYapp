@@ -6,6 +6,7 @@ import { CourseEditorModal } from './CourseEditorModal';
 import { CertificateModal } from './CertificateModal';
 import { GoogleMeetEducatorView } from './GoogleMeetEducatorView';
 import { VideoStudio } from './VideoStudio';
+import { EducatorLectureFeeManager } from './EducatorLectureFeeManager';
 import { 
   Plus, 
   Users, 
@@ -38,12 +39,12 @@ import {
 interface TeacherStudioProps {
   onSelectCourse: (course: Course) => void;
   onOpenTeacherApplication?: () => void;
+  onOpenSignIn?: () => void;
 }
 
-export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, onOpenTeacherApplication }) => {
+export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, onOpenTeacherApplication, onOpenSignIn }) => {
   const { 
     currentUser, 
-    setCurrentUserById,
     allUsers,
     courses, 
     enrollments,
@@ -61,7 +62,7 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
     hostedVideos
   } = useLms();
 
-  const [activeTab, setActiveTab] = useState<'courses' | 'video-studio' | 'meet' | 'discussions' | 'announcements' | 'certificates'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'video-studio' | 'meet' | 'lecture-fees' | 'discussions' | 'announcements' | 'certificates'>('courses');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [publishAlert, setPublishAlert] = useState<string | null>(null);
@@ -185,21 +186,24 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          {onOpenSignIn && (
+            <button
+              onClick={onOpenSignIn}
+              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs"
+            >
+              <Lock className="w-4 h-4" />
+              <span>Log In with Educator Account</span>
+            </button>
+          )}
           {onOpenTeacherApplication && (
             <button
               onClick={onOpenTeacherApplication}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2"
             >
               <BookOpen className="w-4 h-4" />
-              <span>Apply as Instructor (85% Split)</span>
+              <span>Apply as Instructor (70% Split / 30% System Retention)</span>
             </button>
           )}
-          <button
-            onClick={() => setCurrentUserById('user-teacher-1')}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs"
-          >
-            <span>Demo Login: Dr. Elena Vance (Verified Faculty)</span>
-          </button>
         </div>
       </div>
     );
@@ -520,6 +524,18 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
         >
           <Video className="w-4 h-4 text-rose-500" />
           <span>Google Meet Classrooms ({googleMeetSessions.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lecture-fees')}
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
+            activeTab === 'lecture-fees'
+              ? 'bg-white border-t border-x border-slate-200 text-emerald-600 font-bold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <DollarSign className="w-4 h-4 text-emerald-600" />
+          <span>Lecture Fees & Monetization</span>
         </button>
 
         <button
@@ -1079,6 +1095,15 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB: Lecture Fees & Monetization */}
+      {activeTab === 'lecture-fees' && (
+        <EducatorLectureFeeManager
+          courses={teacherCourses}
+          onOpenScheduleMeet={() => setActiveTab('meet')}
+          onEditCourse={(course) => setEditingCourse(course)}
+        />
       )}
 
       {/* Inspecting Certificate Modal */}

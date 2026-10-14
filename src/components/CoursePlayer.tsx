@@ -25,9 +25,11 @@ import {
   Send,
   Star,
   Check,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
+import { PeerReviewFeedbackSection } from './PeerReviewFeedbackSection';
 
 interface CoursePlayerProps {
   course: Course;
@@ -45,11 +47,15 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({ course, onBack }) =>
     discussions,
     addDiscussionThread,
     addDiscussionReply,
-    hostedVideos
+    hostedVideos,
+    assignmentSubmissions
   } = useLms();
 
   const enrollment = getEnrollment(course.id);
   const completedIds = enrollment?.completedLessonIds || [];
+
+  // Count submissions for this course
+  const courseSubmissionsCount = assignmentSubmissions.filter(s => s.courseId === course.id).length;
 
   // Flatten all lessons
   const allLessons: Lesson[] = course.modules.flatMap(m => m.lessons);
@@ -81,8 +87,8 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({ course, onBack }) =>
   const [isMuted, setIsMuted] = useState(false);
   const [simulatedProgress, setSimulatedProgress] = useState(0);
 
-  // Tab state: 'overview' | 'ai_chapters' | 'notes' | 'resources' | 'discussion'
-  const [playerTab, setPlayerTab] = useState<'overview' | 'ai_chapters' | 'notes' | 'resources' | 'discussion'>('overview');
+  // Tab state: 'overview' | 'ai_chapters' | 'notes' | 'peer_reviews' | 'resources' | 'discussion'
+  const [playerTab, setPlayerTab] = useState<'overview' | 'ai_chapters' | 'notes' | 'peer_reviews' | 'resources' | 'discussion'>('overview');
 
   // Personal notes
   const [noteText, setNoteText] = useState('');
@@ -579,6 +585,23 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({ course, onBack }) =>
               </button>
 
               <button
+                onClick={() => setPlayerTab('peer_reviews')}
+                className={`py-3 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  playerTab === 'peer_reviews'
+                    ? 'border-indigo-500 text-indigo-400 font-semibold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Peer Reviews</span>
+                {courseSubmissionsCount > 0 && (
+                  <span className="text-[10px] font-mono bg-indigo-900/50 text-indigo-300 px-1.5 py-0.5 rounded">
+                    {courseSubmissionsCount}
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setPlayerTab('resources')}
                 className={`py-3 border-b-2 transition-colors whitespace-nowrap ${
                   playerTab === 'resources'
@@ -870,6 +893,14 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({ course, onBack }) =>
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono leading-relaxed"
                 />
               </div>
+            )}
+
+            {/* Tab: Peer Reviews Feedback */}
+            {playerTab === 'peer_reviews' && (
+              <PeerReviewFeedbackSection
+                course={course}
+                activeLesson={activeLesson}
+              />
             )}
 
             {/* Tab: Resources */}

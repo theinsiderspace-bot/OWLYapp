@@ -132,41 +132,59 @@ export const OwlyIeltsLaunchIcon: React.FC<{ size?: number; className?: string }
   );
 };
 
+import { useLms } from '../context/LmsContext';
+
 /**
- * Ecosystem Launchers - strictly renders the launch icons to launch in the same frame
- * with NO URL or link text displayed, meeting the prompt specifications exactly.
+ * Ecosystem Launchers - strictly renders interactive launch icons to open in the SAME IFRAME
+ * with NO URL or link text displayed, completely avoiding <a> anchor tags.
  */
 export const EcosystemLaunchers: React.FC<{
   variant?: 'navbar' | 'compact' | 'footer';
   className?: string;
-}> = ({ variant = 'navbar', className = '' }) => {
+  onSelectPlatform?: (platform: 'sat' | 'ielts') => void;
+}> = ({ variant = 'navbar', className = '', onSelectPlatform }) => {
+  const { embeddedEcosystem, setEmbeddedEcosystem } = useLms();
   const iconSize = variant === 'compact' ? 32 : variant === 'footer' ? 34 : 36;
+
+  const handleLaunch = (platform: 'sat' | 'ielts') => {
+    if (onSelectPlatform) {
+      onSelectPlatform(platform);
+    } else {
+      setEmbeddedEcosystem(platform);
+    }
+  };
 
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>
-      {/* Icon to launch https://owlysat.ai.studio/ in the same frame, with NO link displayed */}
-      <a
-        href="https://owlysat.ai.studio/"
-        target="_self"
-        rel="noopener"
+      {/* Button to open OWLY SAT in the same iframe, NO link tag */}
+      <button
+        type="button"
+        onClick={() => handleLaunch('sat')}
         aria-label="Launch OWLY SAT"
         title="Launch OWLY SAT"
-        className="group relative inline-flex items-center justify-center p-0.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 shadow-sm hover:shadow-md"
+        className={`group relative inline-flex items-center justify-center p-0.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 shadow-xs hover:shadow-md cursor-pointer ${
+          embeddedEcosystem === 'sat' 
+            ? 'ring-2 ring-amber-500 ring-offset-1 bg-amber-500/10' 
+            : 'bg-transparent'
+        }`}
       >
         <OwlySatLaunchIcon size={iconSize} className="transition-transform group-hover:scale-105" />
-      </a>
+      </button>
 
-      {/* Icon to launch https://owlyielts.ai.studio/ in the same frame, with NO link displayed */}
-      <a
-        href="https://owlyielts.ai.studio/"
-        target="_self"
-        rel="noopener"
+      {/* Button to open OWLY IELTS in the same iframe, NO link tag */}
+      <button
+        type="button"
+        onClick={() => handleLaunch('ielts')}
         aria-label="Launch OWLY IELTS"
         title="Launch OWLY IELTS"
-        className="group relative inline-flex items-center justify-center p-0.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 shadow-sm hover:shadow-md"
+        className={`group relative inline-flex items-center justify-center p-0.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 shadow-xs hover:shadow-md cursor-pointer ${
+          embeddedEcosystem === 'ielts' 
+            ? 'ring-2 ring-emerald-500 ring-offset-1 bg-emerald-500/10' 
+            : 'bg-transparent'
+        }`}
       >
         <OwlyIeltsLaunchIcon size={iconSize} className="transition-transform group-hover:scale-105" />
-      </a>
+      </button>
     </div>
   );
 };

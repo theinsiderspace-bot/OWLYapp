@@ -12,7 +12,8 @@ import {
   AIPricingRecommendation,
   AIEarningsForecast,
   HostedVideo,
-  CloudStorageMetrics
+  CloudStorageMetrics,
+  AssignmentSubmission
 } from '../types/lms';
 
 export const INITIAL_USERS: User[] = [
@@ -60,9 +61,24 @@ export const INITIAL_USERS: User[] = [
     teacherApplicationId: 'app-teacher-2',
   },
   {
+    id: 'user-admin-theinsiderspace',
+    name: 'Super Admin',
+    email: 'theinsiderspace@gmail.com',
+    password: '1542016',
+    role: 'admin',
+    avatarText: 'SA',
+    title: 'Platform Dean & Super Administrator',
+    bio: 'Super Admin with full platform management, faculty accreditation authority, and catalog governance.',
+    enrolledCourseIds: [],
+    totalSpent: 0,
+    joinedDate: 'Oct 14, 2026',
+    status: 'active',
+  },
+  {
     id: 'user-admin-1',
     name: 'Marcus Sterling',
     email: 'admin@aetherialms.io',
+    password: 'admin',
     role: 'admin',
     avatarText: 'MS',
     title: 'Platform Dean & Head of Operations',
@@ -853,10 +869,12 @@ export const INITIAL_MEET_SESSIONS: GoogleMeetSession[] = [
     meetCode: 'qmv-rtxw-byp',
     status: 'scheduled',
     attendeeCount: 42,
-    maxAttendees: 150,
     description: 'Interactive code walkthrough covering leader election split-vote handling, log replication state machines, and failover recovery testing.',
     createdAt: '2026-10-10T09:00:00Z',
-    isRecorded: true
+    isRecorded: true,
+    lectureFee: 75,
+    systemRetentionFee: 22.50, // 30% retained by system
+    educatorNetEarnings: 52.50  // 70% paid to educator
   },
   {
     id: 'meet-session-2',
@@ -875,7 +893,10 @@ export const INITIAL_MEET_SESSIONS: GoogleMeetSession[] = [
     maxAttendees: 50,
     description: 'Open floor for enrolled students to discuss Module 2 microservice cascading failure exercises, vector clock edge cases, and portfolio capstone designs.',
     createdAt: '2026-10-09T14:30:00Z',
-    isRecorded: false
+    isRecorded: false,
+    lectureFee: 45,
+    systemRetentionFee: 13.50,
+    educatorNetEarnings: 31.50
   },
   {
     id: 'meet-session-3',
@@ -894,12 +915,24 @@ export const INITIAL_MEET_SESSIONS: GoogleMeetSession[] = [
     maxAttendees: 100,
     description: 'Hands-on session using BNF grammar enforcers and tool-calling execution loops for resilient agent pipelines.',
     createdAt: '2026-10-08T11:00:00Z',
-    isRecorded: true
+    isRecorded: true,
+    lectureFee: 120,
+    systemRetentionFee: 36.00,
+    educatorNetEarnings: 84.00
   }
 ];
 
 export const INITIAL_EDUCATOR_BILLING: EducatorBillingProfile = {
-  royaltyPercentage: 85, // 85% instructor payout / 15% platform fee
+  royaltyPercentage: 70, // 70% instructor payout
+  systemRetentionPercentage: 30, // 30% system retention
+  defaultLectureFee: 75, // $75 standard lecture fee
+  lectureFeesBySessionType: {
+    live_lecture: 75,
+    code_review: 95,
+    office_hours: 45,
+    workshop: 120,
+    ama: 35
+  },
   payoutSchedule: 'monthly_1st',
   payoutMethod: 'stripe_connect',
   payoutAccountLast4: '9214',
@@ -1188,4 +1221,275 @@ export const INITIAL_HOSTED_VIDEOS: HostedVideo[] = [
     }
   }
 ];
+
+export const INITIAL_ASSIGNMENT_SUBMISSIONS: AssignmentSubmission[] = [
+  {
+    id: 'sub-1',
+    courseId: 'course-1',
+    courseTitle: 'Distributed Systems & Cloud Architecture at Scale',
+    lessonId: 'les-1-1-2',
+    lessonTitle: '1.2 The Raft Consensus Protocol: Leader Election & Log Replication',
+    studentId: 'user-student-1',
+    studentName: 'Alex Mercer',
+    studentAvatar: 'AM',
+    studentRole: 'student',
+    title: 'Deterministic Raft Election Timeout with Randomized Jitter in Rust',
+    summary: 'A robust state machine implementation tracking Follower -> Candidate -> Leader transitions with heartbeat timers, atomic term increments, and split-brain resolution.',
+    language: 'rust',
+    repoUrl: 'https://github.com/alexmercer/raft-consensus-engine',
+    codeSnippet: `// Raft State Machine: Election Timeout & Candidate Transition
+pub struct RaftNode {
+    pub id: NodeId,
+    pub current_term: Term,
+    pub voted_for: Option<NodeId>,
+    pub log: Vec<LogEntry>,
+    pub role: NodeRole,
+    election_timeout: Duration,
+}
+
+impl RaftNode {
+    pub async fn start_election(&mut self, peers: &[PeerClient]) -> Result<bool, ElectionError> {
+        self.role = NodeRole::Candidate;
+        self.current_term += 1;
+        self.voted_for = Some(self.id);
+        
+        let mut votes_granted = 1; // Vote for self
+        let majority = (peers.len() + 1) / 2 + 1;
+
+        let request = RequestVoteArgs {
+            term: self.current_term,
+            candidate_id: self.id,
+            last_log_index: self.log.len().saturating_sub(1),
+            last_log_term: self.log.last().map_or(0, |e| e.term),
+        };
+
+        // Broadcast RequestVote RPC with randomized timeout jitter (150ms - 300ms)
+        let (tx, mut rx) = mpsc::channel(peers.len());
+        for peer in peers {
+            let client = peer.clone();
+            let args = request.clone();
+            let sender = tx.clone();
+            tokio::spawn(async move {
+                if let Ok(reply) = client.request_vote(args).await {
+                    let _ = sender.send(reply.vote_granted).await;
+                }
+            });
+        }
+
+        while let Some(granted) = rx.recv().await {
+            if granted {
+                votes_granted += 1;
+                if votes_granted >= majority {
+                    self.become_leader();
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+}`,
+    submittedAt: '2 days ago',
+    status: 'distinguished',
+    reviews: [
+      {
+        id: 'rev-1',
+        submissionId: 'sub-1',
+        reviewerId: 'user-teacher-1',
+        reviewerName: 'Dr. Elena Vance',
+        reviewerAvatar: 'EV',
+        reviewerRole: 'teacher',
+        rating: 5,
+        rubric: {
+          clarity: 5,
+          architecture: 5,
+          robustness: 5
+        },
+        strengths: 'Exceptional use of saturating arithmetic and tokio channels for vote collation. The quorum majority calculation is mathematically rigorous.',
+        improvements: 'Consider adding a cancellation token for ongoing RPCs once majority quorum is reached to save network bandwidth.',
+        comment: 'Outstanding submission, Alex. This architecture mirrors production consensus engines like etcd and TiKV. The randomized timeout jitter guarantees clean partition recovery.',
+        createdAt: '1 day ago',
+        helpfulVotes: 7,
+        helpfulUserIds: ['user-student-2', 'user-student-3', 'user-student-4'],
+        comments: [
+          {
+            id: 'rev-com-1',
+            authorId: 'user-student-1',
+            authorName: 'Alex Mercer',
+            authorAvatar: 'AM',
+            authorRole: 'student',
+            content: 'Thank you Dr. Vance! Added a CancellationToken via tokio_util to abort redundant candidate RPCs once quorum is achieved.',
+            createdAt: '18 hours ago'
+          }
+        ]
+      },
+      {
+        id: 'rev-2',
+        submissionId: 'sub-1',
+        reviewerId: 'user-admin-1',
+        reviewerName: 'Marcus Sterling',
+        reviewerAvatar: 'MS',
+        reviewerRole: 'admin',
+        rating: 4,
+        rubric: {
+          clarity: 4,
+          architecture: 5,
+          robustness: 4
+        },
+        strengths: 'Clean async/await structure and good memory boundaries without unnecessary clones.',
+        improvements: 'Add telemetry spans around the vote collation loop so distributed traces highlight slowest responder nodes.',
+        comment: 'Very solid work. Verified against the Raft paper safety invariants.',
+        createdAt: '16 hours ago',
+        helpfulVotes: 3,
+        helpfulUserIds: ['user-student-1'],
+        comments: []
+      }
+    ]
+  },
+  {
+    id: 'sub-2',
+    courseId: 'course-1',
+    courseTitle: 'Distributed Systems & Cloud Architecture at Scale',
+    lessonId: 'les-1-1-1',
+    lessonTitle: '1.1 Physical Time vs. Lamport Logical Clocks',
+    studentId: 'user-student-3',
+    studentName: 'Tariq Al-Mansoor',
+    studentAvatar: 'TM',
+    studentRole: 'student',
+    title: 'Causal Vector Clock Matrix with Pruning Garbage Collector',
+    summary: 'A high-performance TypeScript implementation of causal vector clocks with vector matrix delta compression and periodic node state tombstone compaction.',
+    language: 'typescript',
+    repoUrl: 'https://github.com/tariq-quant/vector-clock-matrix',
+    codeSnippet: `export class VectorClock {
+  private clock: Map<string, number> = new Map();
+
+  constructor(public readonly nodeId: string) {
+    this.clock.set(nodeId, 0);
+  }
+
+  public tick(): void {
+    const current = this.clock.get(this.nodeId) || 0;
+    this.clock.set(this.nodeId, current + 1);
+  }
+
+  public merge(remote: Map<string, number>): void {
+    for (const [node, time] of remote.entries()) {
+      const localTime = this.clock.get(node) || 0;
+      this.clock.set(node, Math.max(localTime, time));
+    }
+    this.tick();
+  }
+
+  public compare(other: VectorClock): 'before' | 'after' | 'concurrent' | 'equal' {
+    let hasLess = false;
+    let hasGreater = false;
+    const allNodes = new Set([...this.clock.keys(), ...other.clock.keys()]);
+
+    for (const node of allNodes) {
+      const t1 = this.clock.get(node) || 0;
+      const t2 = other.clock.get(node) || 0;
+      if (t1 < t2) hasLess = true;
+      if (t1 > t2) hasGreater = true;
+    }
+
+    if (hasLess && !hasGreater) return 'before';
+    if (!hasLess && hasGreater) return 'after';
+    if (!hasLess && !hasGreater) return 'equal';
+    return 'concurrent';
+  }
+}`,
+    submittedAt: '3 days ago',
+    status: 'reviewed',
+    reviews: [
+      {
+        id: 'rev-3',
+        submissionId: 'sub-2',
+        reviewerId: 'user-student-1',
+        reviewerName: 'Alex Mercer',
+        reviewerAvatar: 'AM',
+        reviewerRole: 'student',
+        rating: 5,
+        rubric: {
+          clarity: 5,
+          architecture: 4,
+          robustness: 5
+        },
+        strengths: 'The concurrency detection logic is clean, concise, and mathematically sound.',
+        improvements: 'For clusters with 1,000+ nodes, consider sparse array bitmasks or Roaring Bitmaps instead of standard Maps.',
+        comment: 'Great peer implementation! Tested your compare method with cyclic race conditions and it accurately tagged divergent branches as concurrent.',
+        createdAt: '2 days ago',
+        helpfulVotes: 5,
+        helpfulUserIds: ['user-student-3', 'user-student-4'],
+        comments: [
+          {
+            id: 'rev-com-2',
+            authorId: 'user-student-3',
+            authorName: 'Tariq Al-Mansoor',
+            authorAvatar: 'TM',
+            authorRole: 'student',
+            content: 'Great insight Alex! Exploring Roaring Bitmaps for the next iteration to keep wire size bounded.',
+            createdAt: '1 day ago'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'sub-3',
+    courseId: 'course-1',
+    courseTitle: 'Distributed Systems & Cloud Architecture at Scale',
+    lessonId: 'les-1-1-2',
+    lessonTitle: '1.2 The Raft Consensus Protocol: Leader Election & Log Replication',
+    studentId: 'user-student-4',
+    studentName: 'Claire Dupont',
+    studentAvatar: 'CD',
+    studentRole: 'student',
+    title: 'Formal TLA+ Specification and Model Check for Raft Safety',
+    summary: 'A formal specification model in TLA+ proving election safety invariants: at most one leader can be elected per term, even under arbitrary message loss and network partitions.',
+    language: 'tla+',
+    repoUrl: 'https://github.com/claire-dupont/raft-tla-spec',
+    codeSnippet: `---- MODULE RaftSafety ----
+EXTENDS Naturals, FiniteSets, Sequences
+
+CONSTANTS Server, Value
+VARIABLES currentTerm, state, votedFor, log, commitIndex
+
+TypeOK ==
+  /\ currentTerm \\in [Server -> Nat]
+  /\ state \\in [Server -> {"Follower", "Candidate", "Leader"}]
+  /\ votedFor \\in [Server -> Server \\cup {None}]
+
+ElectionSafety ==
+  \\A s1, s2 \\in Server :
+    (state[s1] = "Leader" /\\ state[s2] = "Leader" /\\ currentTerm[s1] = currentTerm[s2])
+      => s1 = s2
+
+====`,
+    submittedAt: '4 days ago',
+    status: 'distinguished',
+    reviews: [
+      {
+        id: 'rev-4',
+        submissionId: 'sub-3',
+        reviewerId: 'user-teacher-2',
+        reviewerName: 'Prof. Julian Thorne',
+        reviewerAvatar: 'JT',
+        reviewerRole: 'teacher',
+        rating: 5,
+        rubric: {
+          clarity: 5,
+          architecture: 5,
+          robustness: 5
+        },
+        strengths: 'Rigorous formal specification. The TLC model checker completes verification of 5 nodes within 42 seconds.',
+        improvements: 'You could extend the invariant to log matching property across uncommitted follower slices.',
+        comment: 'Superb verification work, Claire. This elevates student submissions from heuristic code to mathematical certainty.',
+        createdAt: '3 days ago',
+        helpfulVotes: 6,
+        helpfulUserIds: ['user-student-1', 'user-student-3'],
+        comments: []
+      }
+    ]
+  }
+];
+
 

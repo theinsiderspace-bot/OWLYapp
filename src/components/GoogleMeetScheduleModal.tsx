@@ -12,7 +12,9 @@ import {
   Radio, 
   BookOpen, 
   ShieldCheck, 
-  ExternalLink 
+  ExternalLink,
+  DollarSign,
+  Percent
 } from 'lucide-react';
 
 interface GoogleMeetScheduleModalProps {
@@ -28,11 +30,14 @@ export const GoogleMeetScheduleModal: React.FC<GoogleMeetScheduleModalProps> = (
   courses,
   defaultCourseId
 }) => {
-  const { currentUser, createMeetSession, isGoogleConnected, connectGoogle } = useLms();
+  const { currentUser, createMeetSession, isGoogleConnected, connectGoogle, educatorBilling } = useLms();
 
   const [title, setTitle] = useState('');
   const [courseId, setCourseId] = useState(defaultCourseId || courses[0]?.id || '');
   const [sessionType, setSessionType] = useState<MeetSessionType>('live_lecture');
+  const [lectureFee, setLectureFee] = useState<number>(() => {
+    return educatorBilling?.lectureFeesBySessionType?.['live_lecture'] ?? educatorBilling?.defaultLectureFee ?? 75;
+  });
   
   // Default to 1 hour from now formatted for datetime-local input
   const defaultDateStr = () => {
@@ -49,6 +54,13 @@ export const GoogleMeetScheduleModal: React.FC<GoogleMeetScheduleModalProps> = (
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleSessionTypeChange = (type: MeetSessionType) => {
+    setSessionType(type);
+    if (educatorBilling?.lectureFeesBySessionType?.[type] !== undefined) {
+      setLectureFee(educatorBilling.lectureFeesBySessionType[type]);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +83,8 @@ export const GoogleMeetScheduleModal: React.FC<GoogleMeetScheduleModalProps> = (
         status: 'scheduled',
         maxAttendees,
         description: description.trim() || `Live ${sessionType.replace('_', ' ')} with ${currentUser?.name || 'Instructor'}.`,
-        isRecorded
+        isRecorded,
+        lectureFee: Number(lectureFee) || 0
       });
       onClose();
     } catch (err) {
@@ -208,7 +221,7 @@ export const GoogleMeetScheduleModal: React.FC<GoogleMeetScheduleModalProps> = (
               </label>
               <select
                 value={sessionType}
-                onChange={(e) => setSessionType(e.target.value as MeetSessionType)}
+                onChange={(e) => handleSessionTypeChange(e.target.value as MeetSessionType)}
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
               >
                 <option value="live_lecture">🎙️ Live Lecture (Broadcast + Chat)</option>
@@ -250,6 +263,49 @@ export const GoogleMeetScheduleModal: React.FC<GoogleMeetScheduleModalProps> = (
                 <option value={90}>90 mins (1.5 hrs)</option>
                 <option value={120}>120 mins (2 hrs)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Lecture Fee & Revenue Split (30% System Retention) */}
+          <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Live Lecture Admission Fee ($ USD)</span>
+                </label>
+                <span className="text-[11px] text-emerald-800">
+                  Per enrolled student · System retains 30% for video CDN & infrastructure
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-emerald-200/80 text-emerald-950 px-2 py-0.5 rounded">
+                30% Sys / 70% Net
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-slate-400 font-mono font-bold text-sm">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={lectureFee}
+                  onChange={(e) => setLectureFee(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full pl-7 pr-3 py-2 text-sm bg-white border border-emerald-300 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              <div className="text-xs space-y-1 font-mono bg-white/70 p-2 rounded-lg border border-emerald-200/60">
+                <div className="flex justify-between text-amber-800">
+                  <span>System Retained (30%):</span>
+                  <span>-${(lectureFee * 0.30).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-emerald-700 border-t border-emerald-100 pt-0.5">
+                  <span>Your Net Take-Home (70%):</span>
+                  <span>+${(lectureFee * 0.70).toFixed(2)}</span>
+                </div>
+              </div>
             </div>
           </div>
 

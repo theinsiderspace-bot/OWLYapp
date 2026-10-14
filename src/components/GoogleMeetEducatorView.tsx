@@ -19,7 +19,8 @@ import {
   ShieldCheck, 
   RefreshCw,
   Share2,
-  Tv
+  Tv,
+  DollarSign
 } from 'lucide-react';
 
 interface GoogleMeetEducatorViewProps {
@@ -370,6 +371,25 @@ Meeting Code: ${session.meetCode}`;
                     <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                       {session.description}
                     </p>
+                  )}
+
+                  {/* Lecture Fee & 30% System Retention Breakdown */}
+                  {session.lectureFee !== undefined && session.lectureFee > 0 ? (
+                    <div className="flex items-center justify-between text-xs bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3 py-2 text-emerald-950">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Lecture Fee: <strong className="font-mono text-slate-900">${session.lectureFee}</strong></span>
+                      </div>
+                      <div className="text-[11px] font-mono text-emerald-800">
+                        <span className="text-amber-800">Sys (30%): -${((session.systemRetentionFee ?? session.lectureFee * 0.3)).toFixed(2)}</span>
+                        <span className="mx-1 text-slate-300">·</span>
+                        <span className="text-emerald-700 font-bold">Net (70%): +${((session.educatorNetEarnings ?? session.lectureFee * 0.7)).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-1.5 text-slate-600">
+                      <span>Admission: Free for enrolled masterclass learners</span>
+                    </div>
                   )}
 
                   {/* Google Meet Link Display */}

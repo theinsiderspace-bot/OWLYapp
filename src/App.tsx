@@ -12,6 +12,7 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { AuthModal, AuthModalMode } from './components/AuthModal';
 import { OwlyBrand } from './components/OwlyBrand';
 import { EcosystemLaunchers } from './components/EcosystemLaunchers';
+import { EmbeddedEcosystemViewer } from './components/EmbeddedEcosystemViewer';
 import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { 
   ShieldCheck, 
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 
 function LMSAppContent() {
-  const { currentUser, isUserEnrolled } = useLms();
+  const { currentUser, isUserEnrolled, embeddedEcosystem, setEmbeddedEcosystem } = useLms();
 
   const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy'>('catalog');
   const [selectedCourseForDetails, setSelectedCourseForDetails] = useState<Course | null>(null);
@@ -73,48 +74,63 @@ function LMSAppContent() {
     );
   }
 
+  const handleTabChange = (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy') => {
+    setEmbeddedEcosystem(null);
+    setActiveTab(tab);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Top Bar adhering to Top Bar Contract */}
       <Navbar 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={handleTabChange} 
         onOpenAuthModal={handleOpenAuth}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1">
-        {activeTab === 'catalog' && (
-          <CourseCatalog
-            onSelectCourse={handleSelectCourse}
-            onEnrollCourse={handleEnrollClick}
-            onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
-            onOpenStudentSignup={() => handleOpenAuth('student_signup')}
-            onOpenSignIn={() => handleOpenAuth('signin')}
+      <main className="flex-1 flex flex-col">
+        {embeddedEcosystem ? (
+          <EmbeddedEcosystemViewer
+            initialPlatform={embeddedEcosystem}
+            onClose={() => setEmbeddedEcosystem(null)}
           />
-        )}
+        ) : (
+          <>
+            {activeTab === 'catalog' && (
+              <CourseCatalog
+                onSelectCourse={handleSelectCourse}
+                onEnrollCourse={handleEnrollClick}
+                onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
+                onOpenStudentSignup={() => handleOpenAuth('student_signup')}
+                onOpenSignIn={() => handleOpenAuth('signin')}
+              />
+            )}
 
-        {activeTab === 'learning' && (
-          <MyLearning
-            onSelectCourse={(course) => setActiveLearningCourse(course)}
-            onBrowseCatalog={() => setActiveTab('catalog')}
-            onOpenAuth={handleOpenAuth}
-          />
-        )}
+            {activeTab === 'learning' && (
+              <MyLearning
+                onSelectCourse={(course) => setActiveLearningCourse(course)}
+                onBrowseCatalog={() => setActiveTab('catalog')}
+                onOpenAuth={handleOpenAuth}
+              />
+            )}
 
-        {activeTab === 'teacher' && (
-          <TeacherStudio
-            onSelectCourse={handleSelectCourse}
-            onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
-          />
-        )}
+            {activeTab === 'teacher' && (
+              <TeacherStudio
+                onSelectCourse={handleSelectCourse}
+                onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
+                onOpenSignIn={() => handleOpenAuth('signin')}
+              />
+            )}
 
-        {activeTab === 'admin' && (
-          <AdminDashboard />
-        )}
+            {activeTab === 'admin' && (
+              <AdminDashboard />
+            )}
 
-        {activeTab === 'privacy' && (
-          <PrivacyPolicyPage onBack={() => { setActiveTab('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            {activeTab === 'privacy' && (
+              <PrivacyPolicyPage onBack={() => { setActiveTab('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            )}
+          </>
         )}
       </main>
 
@@ -172,20 +188,20 @@ function LMSAppContent() {
 
             <div className="flex flex-wrap items-center gap-6 text-xs text-slate-500 font-medium">
               <button 
-                onClick={() => { setActiveTab('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-                className={`hover:text-slate-900 transition-colors ${activeTab === 'catalog' ? 'text-indigo-600 font-semibold' : ''}`}
+                onClick={() => { handleTabChange('catalog'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'catalog' && !embeddedEcosystem ? 'text-indigo-600 font-semibold' : ''}`}
               >
                 Course Catalog
               </button>
               <button 
-                onClick={() => { setActiveTab('learning'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-                className={`hover:text-slate-900 transition-colors ${activeTab === 'learning' ? 'text-indigo-600 font-semibold' : ''}`}
+                onClick={() => { handleTabChange('learning'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'learning' && !embeddedEcosystem ? 'text-indigo-600 font-semibold' : ''}`}
               >
                 My Learning
               </button>
               <button 
-                onClick={() => { setActiveTab('privacy'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-                className={`hover:text-slate-900 transition-colors ${activeTab === 'privacy' ? 'text-indigo-600 font-semibold' : ''}`}
+                onClick={() => { handleTabChange('privacy'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'privacy' && !embeddedEcosystem ? 'text-indigo-600 font-semibold' : ''}`}
               >
                 Privacy Policy
               </button>

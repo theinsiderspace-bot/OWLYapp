@@ -25,6 +25,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: UserRole;
   avatarText: string;
   title?: string;
@@ -202,11 +203,17 @@ export interface GoogleMeetSession {
   description: string;
   createdAt: string;
   isRecorded?: boolean;
+  lectureFee?: number; // Fee set by educator for live lecture ($ USD)
+  systemRetentionFee?: number; // 30% platform retention ($ USD)
+  educatorNetEarnings?: number; // 70% net educator payout ($ USD)
 }
 
 // AI-Driven Billing & Financial Types
 export interface EducatorBillingProfile {
-  royaltyPercentage: number; // e.g. 85 = 85%
+  royaltyPercentage: number; // Educator take-home share: 70 = 70%
+  systemRetentionPercentage: number; // Platform retained share: 30 = 30%
+  defaultLectureFee: number; // Educator configured lecture fee (e.g. $75 USD)
+  lectureFeesBySessionType?: Record<MeetSessionType, number>; // Custom fee per session type
   payoutSchedule: 'manual' | 'monthly_1st' | 'biweekly';
   payoutMethod: 'stripe_connect' | 'direct_deposit' | 'paypal';
   payoutAccountLast4: string;
@@ -319,4 +326,60 @@ export interface CloudStorageMetrics {
   totalHostedVideos: number;
   edgeLocationsActive: number;
 }
+
+// Peer Review & Assignment Feedback Types
+export interface PeerReviewRubric {
+  clarity: number;       // 1 - 5
+  architecture: number;  // 1 - 5
+  robustness: number;    // 1 - 5
+}
+
+export interface PeerReviewComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  authorRole: UserRole;
+  content: string;
+  createdAt: string;
+}
+
+export interface PeerReview {
+  id: string;
+  submissionId: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar: string;
+  reviewerRole: UserRole;
+  rating: number; // 1 - 5
+  rubric: PeerReviewRubric;
+  strengths: string;
+  improvements: string;
+  comment: string;
+  createdAt: string;
+  helpfulVotes: number;
+  helpfulUserIds: string[];
+  comments: PeerReviewComment[];
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  lessonId: string;
+  lessonTitle: string;
+  studentId: string;
+  studentName: string;
+  studentAvatar: string;
+  studentRole: UserRole;
+  title: string;
+  summary: string;
+  codeSnippet?: string;
+  language?: string;
+  repoUrl?: string;
+  submittedAt: string;
+  status: 'pending_review' | 'reviewed' | 'distinguished';
+  reviews: PeerReview[];
+}
+
 

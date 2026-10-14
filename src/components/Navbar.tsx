@@ -271,7 +271,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
               <EcosystemLaunchers variant="navbar" />
             </div>
 
-            {/* Quick Demo Reset */}
+            {/* Reset Sample State */}
             <button
               onClick={resetPlatformData}
               title="Reset sample data"

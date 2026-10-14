@@ -36,7 +36,7 @@ export const CourseCatalog: React.FC<CourseCatalogProps> = ({
   onOpenStudentSignup,
   onOpenSignIn
 }) => {
-  const { courses, currentUser, setCurrentUserById } = useLms();
+  const { courses, currentUser } = useLms();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -137,13 +137,6 @@ export const CourseCatalog: React.FC<CourseCatalogProps> = ({
                         <span>Create Account</span>
                       </button>
                     )}
-                    <button
-                      onClick={() => setCurrentUserById('user-student-1')}
-                      className="px-3 py-2 bg-slate-950 hover:bg-indigo-950/60 text-slate-400 hover:text-indigo-300 border border-slate-800 rounded-xl text-[11px] font-medium transition-colors"
-                      title="Quick test login as student Alex Mercer"
-                    >
-                      <span>Quick Demo Student</span>
-                    </button>
                   </div>
                 </div>
               </div>

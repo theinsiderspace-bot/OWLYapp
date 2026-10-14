@@ -330,6 +330,17 @@ export const CourseEditorModal: React.FC<CourseEditorModalProps> = ({
                       className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono tabular-nums text-slate-900"
                     />
                   </div>
+                  {/* Real-time 30% System Retention Split */}
+                  <div className="mt-2 p-2 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs space-y-1 font-mono">
+                    <div className="flex justify-between items-center text-amber-800 text-[11px]">
+                      <span>System Retention (30%):</span>
+                      <span>-${((parseFloat(price) || 0) * 0.30).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-800 font-bold border-t border-emerald-200/60 pt-0.5">
+                      <span>Educator Net Payout (70%):</span>
+                      <span>+${((parseFloat(price) || 0) * 0.70).toFixed(2)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

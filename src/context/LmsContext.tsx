@@ -12,11 +12,16 @@ import {
   TeacherApplication,
   TeacherVerificationStatus,
   GoogleMeetSession,
+  MeetSessionType,
   EducatorBillingProfile,
   PayoutRecord,
   AIPricingRecommendation,
   HostedVideo,
-  CloudStorageMetrics
+  CloudStorageMetrics,
+  AssignmentSubmission,
+  PeerReview,
+  PeerReviewRubric,
+  PeerReviewComment
 } from '../types/lms';
 import {
   INITIAL_USERS,
@@ -31,7 +36,8 @@ import {
   INITIAL_PAYOUTS,
   INITIAL_AI_RECOMMENDATIONS,
   INITIAL_HOSTED_VIDEOS,
-  INITIAL_STORAGE_METRICS
+  INITIAL_STORAGE_METRICS,
+  INITIAL_ASSIGNMENT_SUBMISSIONS
 } from '../data/mockData';
 import {
   initAuth,
@@ -100,6 +106,7 @@ interface LmsContextType {
   // AI-Driven Billing & Revenue Management
   educatorBilling: EducatorBillingProfile;
   updateEducatorBilling: (updates: Partial<EducatorBillingProfile>) => void;
+  setEducatorLectureFee: (fee: number, sessionType?: MeetSessionType) => void;
   payouts: PayoutRecord[];
   requestPayout: (amount?: number) => PayoutRecord;
   aiPricingRecommendations: AIPricingRecommendation[];
@@ -168,6 +175,36 @@ interface LmsContextType {
   announcements: Announcement[];
   createAnnouncement: (courseId: string, title: string, content: string) => void;
 
+  // Peer Review Feedback & Assignment Submissions
+  assignmentSubmissions: AssignmentSubmission[];
+  submitAssignment: (data: {
+    courseId: string;
+    courseTitle: string;
+    lessonId: string;
+    lessonTitle: string;
+    title: string;
+    summary: string;
+    codeSnippet?: string;
+    language?: string;
+    repoUrl?: string;
+  }) => AssignmentSubmission;
+  addPeerReview: (
+    submissionId: string, 
+    review: {
+      rating: number;
+      rubric: { clarity: number; architecture: number; robustness: number };
+      strengths: string;
+      improvements: string;
+      comment: string;
+    }
+  ) => void;
+  addReviewComment: (submissionId: string, reviewId: string, content: string) => void;
+  voteReviewHelpful: (submissionId: string, reviewId: string) => void;
+
+  // Embedded Ecosystem (OWLY SAT & OWLY IELTS open in same iframe, no link)
+  embeddedEcosystem: 'sat' | 'ielts' | null;
+  setEmbeddedEcosystem: (platform: 'sat' | 'ielts' | null) => void;
+
   // Reset to demo data
   resetPlatformData: () => void;
 }
@@ -188,15 +225,45 @@ const STORAGE_KEYS = {
   EDUCATOR_BILLING: 'aetheria_lms_educator_billing_v1',
   PAYOUTS: 'aetheria_lms_payouts_v1',
   AI_RECOMMENDATIONS: 'aetheria_lms_ai_recs_v1',
-  HOSTED_VIDEOS: 'aetheria_lms_hosted_videos_v1'
+  HOSTED_VIDEOS: 'aetheria_lms_hosted_videos_v1',
+  ASSIGNMENT_SUBMISSIONS: 'aetheria_lms_submissions_v1'
 };
 
 export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load or fallback to initial data
+  // Load or fallback to initial data with persistent admin credentials
   const [allUsers, setAllUsers] = useState<User[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.USERS);
-      return stored ? JSON.parse(stored) : INITIAL_USERS;
+      let users: User[] = stored ? JSON.parse(stored) : [...INITIAL_USERS];
+
+      // Guarantee the requested admin user is always registered and credentials remain up to date
+      const adminEmail = 'theinsiderspace@gmail.com';
+      const existingIdx = users.findIndex(u => u.email.toLowerCase() === adminEmail.toLowerCase());
+      const adminUser: User = {
+        id: existingIdx >= 0 ? users[existingIdx].id : 'user-admin-theinsiderspace',
+        name: 'Super Admin',
+        email: adminEmail,
+        password: '1542016',
+        role: 'admin',
+        avatarText: 'SA',
+        title: 'Platform Dean & Super Administrator',
+        bio: 'Super Admin with full platform management, faculty accreditation authority, and catalog governance.',
+        enrolledCourseIds: [],
+        totalSpent: 0,
+        joinedDate: 'Oct 14, 2026',
+        status: 'active',
+      };
+
+      if (existingIdx >= 0) {
+        users[existingIdx] = { ...users[existingIdx], ...adminUser };
+      } else {
+        users = [adminUser, ...users];
+      }
+      try {
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      } catch {}
+
+      return users;
     } catch {
       return INITIAL_USERS;
     }
@@ -289,7 +356,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [educatorBilling, setEducatorBilling] = useState<EducatorBillingProfile>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.EDUCATOR_BILLING);
-      return stored ? JSON.parse(stored) : INITIAL_EDUCATOR_BILLING;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          ...INITIAL_EDUCATOR_BILLING,
+          ...parsed,
+          royaltyPercentage: 70, // 70% educator net payout
+          systemRetentionPercentage: 30, // 30% system retention
+          defaultLectureFee: typeof parsed.defaultLectureFee === 'number' ? parsed.defaultLectureFee : 75,
+          lectureFeesBySessionType: parsed.lectureFeesBySessionType || INITIAL_EDUCATOR_BILLING.lectureFeesBySessionType
+        };
+      }
+      return INITIAL_EDUCATOR_BILLING;
     } catch {
       return INITIAL_EDUCATOR_BILLING;
     }
@@ -323,6 +401,25 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [storageMetrics, setStorageMetrics] = useState<CloudStorageMetrics>(INITIAL_STORAGE_METRICS);
+
+  // Peer Review & Assignment Submissions state
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<AssignmentSubmission[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS);
+      return stored ? JSON.parse(stored) : INITIAL_ASSIGNMENT_SUBMISSIONS;
+    } catch {
+      return INITIAL_ASSIGNMENT_SUBMISSIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS, JSON.stringify(assignmentSubmissions));
+    } catch {}
+  }, [assignmentSubmissions]);
+
+  // Embedded Ecosystem state: OWLY SAT & OWLY IELTS loaded inside same iframe with no links displayed
+  const [embeddedEcosystem, setEmbeddedEcosystem] = useState<'sat' | 'ielts' | null>(null);
 
   // Google Workspace Auth State (in-memory token, no localStorage storage of credentials)
   const [googleAuthUser, setGoogleAuthUser] = useState<any>(null);
@@ -1051,6 +1148,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGoogleAuthUser(res.user);
         setGoogleAccessToken(res.accessToken);
         setIsGoogleConnected(true);
+        if (res.user.email?.toLowerCase() === 'theinsiderspace@gmail.com') {
+          setActiveUserId('user-admin-theinsiderspace');
+          setActiveRole('admin');
+        }
         return true;
       }
       return false;
@@ -1102,6 +1203,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       finalMeetCode = code;
     }
 
+    const sessionFee = sessionData.lectureFee !== undefined 
+      ? sessionData.lectureFee 
+      : (educatorBilling.lectureFeesBySessionType?.[sessionData.sessionType] ?? educatorBilling.defaultLectureFee ?? 75);
+    const systemRetentionFee = Math.round(sessionFee * 0.30 * 100) / 100;
+    const educatorNetEarnings = Math.round(sessionFee * 0.70 * 100) / 100;
+
     const newSession: GoogleMeetSession = {
       ...sessionData,
       id,
@@ -1109,7 +1216,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       meetCode: finalMeetCode,
       calendarEventId: calEventId,
       attendeeCount: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      lectureFee: sessionFee,
+      systemRetentionFee,
+      educatorNetEarnings
     };
 
     setGoogleMeetSessions(prev => [newSession, ...prev]);
@@ -1118,7 +1228,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     createAnnouncement(
       sessionData.courseId,
       `🔴 Live Google Meet Class Scheduled: ${sessionData.title}`,
-      `A new Google Meet ${sessionData.sessionType.replace('_', ' ')} has been scheduled for ${new Date(sessionData.scheduledAt).toLocaleString()}. Access Link: ${finalMeetUrl}`
+      `A new Google Meet ${sessionData.sessionType.replace('_', ' ')} has been scheduled for ${new Date(sessionData.scheduledAt).toLocaleString()}. Admission: $${sessionFee} USD (System retains 30% / $${systemRetentionFee}). Access Link: ${finalMeetUrl}`
     );
 
     return newSession;
@@ -1139,7 +1249,38 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // AI-Driven Billing & Revenue Methods
   const updateEducatorBilling = (updates: Partial<EducatorBillingProfile>) => {
-    setEducatorBilling(prev => ({ ...prev, ...updates }));
+    setEducatorBilling(prev => ({ 
+      ...prev, 
+      ...updates,
+      // Maintain 30% platform retention and 70% educator net share
+      royaltyPercentage: updates.royaltyPercentage ?? 70,
+      systemRetentionPercentage: updates.systemRetentionPercentage ?? 30
+    }));
+  };
+
+  const setEducatorLectureFee = (fee: number, sessionType?: MeetSessionType) => {
+    const cleanFee = Math.max(0, Math.round(fee * 100) / 100);
+    setEducatorBilling(prev => {
+      if (sessionType) {
+        return {
+          ...prev,
+          lectureFeesBySessionType: {
+            ...(prev.lectureFeesBySessionType || {
+              live_lecture: 75,
+              code_review: 95,
+              office_hours: 45,
+              workshop: 120,
+              ama: 35
+            }),
+            [sessionType]: cleanFee
+          }
+        };
+      }
+      return {
+        ...prev,
+        defaultLectureFee: cleanFee
+      };
+    });
   };
 
   const requestPayout = (amount?: number): PayoutRecord => {
@@ -1376,6 +1517,154 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
     };
   };
 
+  // Peer Review & Assignment Submissions
+  const submitAssignment = (data: {
+    courseId: string;
+    courseTitle: string;
+    lessonId: string;
+    lessonTitle: string;
+    title: string;
+    summary: string;
+    codeSnippet?: string;
+    language?: string;
+    repoUrl?: string;
+  }): AssignmentSubmission => {
+    const studentUser = currentUser || {
+      id: 'student-anonymous',
+      name: 'Enrolled Scholar',
+      avatarText: 'ES',
+      role: 'student' as UserRole
+    };
+
+    const newSub: AssignmentSubmission = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      courseId: data.courseId,
+      courseTitle: data.courseTitle,
+      lessonId: data.lessonId,
+      lessonTitle: data.lessonTitle,
+      studentId: studentUser.id,
+      studentName: studentUser.name,
+      studentAvatar: studentUser.avatarText || studentUser.name.substring(0, 2).toUpperCase(),
+      studentRole: (studentUser.role as UserRole) || 'student',
+      title: data.title,
+      summary: data.summary,
+      codeSnippet: data.codeSnippet,
+      language: data.language || 'typescript',
+      repoUrl: data.repoUrl,
+      submittedAt: 'Just now',
+      status: 'pending_review',
+      reviews: []
+    };
+
+    setAssignmentSubmissions(prev => [newSub, ...prev]);
+    return newSub;
+  };
+
+  const addPeerReview = (
+    submissionId: string,
+    review: {
+      rating: number;
+      rubric: { clarity: number; architecture: number; robustness: number };
+      strengths: string;
+      improvements: string;
+      comment: string;
+    }
+  ) => {
+    const reviewer = currentUser || {
+      id: 'student-peer',
+      name: 'Peer Reviewer',
+      avatarText: 'PR',
+      role: 'student' as UserRole
+    };
+
+    const newReview: PeerReview = {
+      id: `rev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      submissionId,
+      reviewerId: reviewer.id,
+      reviewerName: reviewer.name,
+      reviewerAvatar: reviewer.avatarText || reviewer.name.substring(0, 2).toUpperCase(),
+      reviewerRole: (reviewer.role as UserRole) || 'student',
+      rating: review.rating,
+      rubric: review.rubric,
+      strengths: review.strengths,
+      improvements: review.improvements,
+      comment: review.comment,
+      createdAt: 'Just now',
+      helpfulVotes: 0,
+      helpfulUserIds: [],
+      comments: []
+    };
+
+    setAssignmentSubmissions(prev => prev.map(sub => {
+      if (sub.id !== submissionId) return sub;
+      const allReviews = [newReview, ...sub.reviews];
+      const avgRating = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
+      const status: 'pending_review' | 'reviewed' | 'distinguished' = 
+        allReviews.length >= 2 && avgRating >= 4.5 ? 'distinguished' : 'reviewed';
+
+      return {
+        ...sub,
+        status,
+        reviews: allReviews
+      };
+    }));
+  };
+
+  const addReviewComment = (submissionId: string, reviewId: string, content: string) => {
+    const author = currentUser || {
+      id: 'student-peer',
+      name: 'Peer Scholar',
+      avatarText: 'PS',
+      role: 'student' as UserRole
+    };
+
+    const newComment: PeerReviewComment = {
+      id: `rev-com-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      authorId: author.id,
+      authorName: author.name,
+      authorAvatar: author.avatarText || author.name.substring(0, 2).toUpperCase(),
+      authorRole: (author.role as UserRole) || 'student',
+      content,
+      createdAt: 'Just now'
+    };
+
+    setAssignmentSubmissions(prev => prev.map(sub => {
+      if (sub.id !== submissionId) return sub;
+      return {
+        ...sub,
+        reviews: sub.reviews.map(rev => {
+          if (rev.id !== reviewId) return rev;
+          return {
+            ...rev,
+            comments: [...rev.comments, newComment]
+          };
+        })
+      };
+    }));
+  };
+
+  const voteReviewHelpful = (submissionId: string, reviewId: string) => {
+    const userId = currentUser?.id || 'guest-user';
+    setAssignmentSubmissions(prev => prev.map(sub => {
+      if (sub.id !== submissionId) return sub;
+      return {
+        ...sub,
+        reviews: sub.reviews.map(rev => {
+          if (rev.id !== reviewId) return rev;
+          const hasVoted = rev.helpfulUserIds.includes(userId);
+          const helpfulUserIds = hasVoted
+            ? rev.helpfulUserIds.filter(id => id !== userId)
+            : [...rev.helpfulUserIds, userId];
+          return {
+            ...rev,
+            helpfulVotes: helpfulUserIds.length,
+            helpfulUserIds
+          };
+        })
+      };
+    }));
+  };
+
   // Reset demo
   const resetPlatformData = () => {
     localStorage.removeItem(STORAGE_KEYS.USERS);
@@ -1393,6 +1682,7 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
     localStorage.removeItem(STORAGE_KEYS.PAYOUTS);
     localStorage.removeItem(STORAGE_KEYS.AI_RECOMMENDATIONS);
     localStorage.removeItem(STORAGE_KEYS.HOSTED_VIDEOS);
+    localStorage.removeItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS);
 
     setAllUsers(INITIAL_USERS);
     setActiveRole('guest');
@@ -1443,6 +1733,7 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
         disconnectGoogle,
         educatorBilling,
         updateEducatorBilling,
+        setEducatorLectureFee,
         payouts,
         requestPayout,
         aiPricingRecommendations,
@@ -1475,6 +1766,13 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
         toggleEndorseReply,
         announcements,
         createAnnouncement,
+        assignmentSubmissions,
+        submitAssignment,
+        addPeerReview,
+        addReviewComment,
+        voteReviewHelpful,
+        embeddedEcosystem,
+        setEmbeddedEcosystem,
         resetPlatformData
       }}
     >

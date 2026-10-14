@@ -314,13 +314,13 @@ export const AIBillingDashboard: React.FC = () => {
               Net Faculty Share
             </span>
             <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-              85%
+              {educatorBilling.royaltyPercentage}% Net
             </span>
           </div>
           <div className="text-2xl font-bold text-indigo-700 font-mono tabular-nums">
             ${Math.round(educatorNetEarnings).toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Platform fee: ${Math.round(platformFeeAmount).toLocaleString()}</p>
+          <p className="text-[11px] text-slate-500 mt-1">System retains 30%: ${Math.round(platformFeeAmount).toLocaleString()}</p>
         </div>
 
         {/* Available Payout */}
@@ -740,7 +740,7 @@ export const AIBillingDashboard: React.FC = () => {
                   <span className="font-bold text-indigo-700">${generatedStatement.educatorGrossShare.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-600">Platform Infrastructure Fee (15%):</span>
+                  <span className="text-slate-600">Platform System Retention Fee (30%):</span>
                   <span className="text-slate-500">-${generatedStatement.platformFee.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-200">
