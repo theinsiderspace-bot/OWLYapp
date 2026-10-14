@@ -1,0 +1,6 @@
+{
+  "name": "Aetheria LMS - Course Marketplace & Learning Management",
+  "description": "Full-scale LMS platform with AI-driven video hosting & recording studio, live teleprompter HUD, automated chapter & quiz generation, Google Meet classrooms, and educator billing monetization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
