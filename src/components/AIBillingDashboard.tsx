@@ -65,7 +65,7 @@ export const AIBillingDashboard: React.FC = () => {
   // Compute instructor financials
   const teacherCourses = courses;
   const grossGMV = teacherCourses.reduce((sum, c) => sum + (c.studentCount * c.price), 0);
-  const royaltySharePercent = educatorBilling.royaltyPercentage; // 85%
+  const royaltySharePercent = educatorBilling.royaltyPercentage; // 70% educator net (30% system retention)
   const educatorNetEarnings = grossGMV * (royaltySharePercent / 100);
   const platformFeeAmount = grossGMV - educatorNetEarnings;
   const totalPaidOut = payouts

@@ -19,17 +19,21 @@ import {
   Menu,
   X,
   Briefcase,
-  LogOut
+  LogOut,
+  Dna,
+  Gamepad2,
+  Lock
 } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy';
-  setActiveTab: (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy') => void;
+  activeTab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience';
+  setActiveTab: (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => void;
   onOpenCart?: () => void;
   onOpenAuthModal?: (mode: 'student_signup' | 'teacher_signup' | 'signin') => void;
+  onLaunchGame?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenAuthModal }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenAuthModal, onLaunchGame }) => {
   const { currentUser, signOut, enrollments, resetPlatformData } = useLms();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -86,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                   <Briefcase className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
                   <span>Teach on OWLY</span>
                   <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-full">
-                    85% Split
+                    70% Split (30% Sys)
                   </span>
                 </button>
 
@@ -135,7 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                   <Briefcase className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
                   <span>Teach on OWLY</span>
                   <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-full">
-                    85% Split
+                    70% Split (30% Sys)
                   </span>
                 </button>
 
@@ -262,10 +266,41 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                 </div>
               </>
             )}
+
+            {/* Bioscience Discovery & 3D Lab Tab */}
+            <button
+              onClick={() => setActiveTab('bioscience')}
+              className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
+                activeTab === 'bioscience'
+                  ? 'text-teal-600 font-semibold border-b-2 border-teal-600'
+                  : 'text-slate-600 hover:text-teal-600'
+              }`}
+            >
+              <Dna className="w-4 h-4 text-teal-600" />
+              <span>Bioscience Lab</span>
+              {!(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1 ml-0.5" title="Requires educator or admin credentials">
+                  <Lock className="w-2.5 h-2.5 text-slate-400" />
+                  <span>Faculty</span>
+                </span>
+              )}
+            </button>
           </nav>
 
           {/* Zone 3: Actions & Profile Switcher */}
           <div className="flex items-center gap-2.5 shrink-0">
+            {/* 3D Game Quick Launcher */}
+            {onLaunchGame && (
+              <button
+                onClick={onLaunchGame}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+                title="Launch 3D CRISPR-NANO Simulation Game"
+              >
+                <Gamepad2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">3D Bio-Game</span>
+              </button>
+            )}
+
             {/* Owly Ecosystem Launchers: OWLY SAT & OWLY IELTS in same frame, no link displayed */}
             <div className="flex items-center p-0.5 bg-slate-100/90 border border-slate-200/90 rounded-xl shadow-xs">
               <EcosystemLaunchers variant="navbar" />
@@ -633,7 +668,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                     <span>Teach on OWLY</span>
                   </div>
                   <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                    85% Split
+                    70% Split (30% Sys)
                   </span>
                 </button>
               </div>
@@ -675,9 +710,36 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                     <span>Teach on OWLY</span>
                   </div>
                   <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                    85% Split
+                    70% Split (30% Sys)
                   </span>
                 </button>
+
+                {/* Mobile Bioscience & 3D Game Buttons */}
+                <button
+                  onClick={() => { setActiveTab('bioscience'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center justify-between ${
+                    activeTab === 'bioscience' ? 'bg-teal-50 text-teal-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Dna className="w-4 h-4 text-teal-600" />
+                    <span>Bioscience Lab & AlphaFold</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5 text-slate-400" />
+                    <span>Faculty</span>
+                  </span>
+                </button>
+
+                {onLaunchGame && (
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); onLaunchGame(); }}
+                    className="w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-bold shadow-xs"
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                    <span>Launch 3D CRISPR-NANO Game</span>
+                  </button>
+                )}
               </>
             )}
 
@@ -716,6 +778,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                       {enrolledCount}
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('bioscience'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 ${
+                    activeTab === 'bioscience' ? 'bg-teal-50 text-teal-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Dna className="w-4 h-4 text-teal-600" />
+                  <span>Bioscience Lab & AlphaFold</span>
                 </button>
               </>
             )}
@@ -757,6 +828,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                 >
                   <GraduationCap className="w-4 h-4 text-indigo-500" />
                   <span>Learner Preview</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab('bioscience'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 ${
+                    activeTab === 'bioscience' ? 'bg-teal-50 text-teal-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Dna className="w-4 h-4 text-teal-600" />
+                  <span>Bioscience Lab & AlphaFold</span>
                 </button>
               </>
             )}

@@ -14,6 +14,8 @@ import { OwlyBrand } from './components/OwlyBrand';
 import { EcosystemLaunchers } from './components/EcosystemLaunchers';
 import { EmbeddedEcosystemViewer } from './components/EmbeddedEcosystemViewer';
 import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
+import { BioscienceResearchHub } from './components/BioscienceResearchHub';
+import { MolecularDefenseGame } from './components/game/MolecularDefenseGame';
 import { 
   ShieldCheck, 
   GraduationCap, 
@@ -26,7 +28,8 @@ import {
 function LMSAppContent() {
   const { currentUser, isUserEnrolled, embeddedEcosystem, setEmbeddedEcosystem } = useLms();
 
-  const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience'>('catalog');
+  const [is3DGameOpen, setIs3DGameOpen] = useState(false);
   const [selectedCourseForDetails, setSelectedCourseForDetails] = useState<Course | null>(null);
   const [selectedCourseForCheckout, setSelectedCourseForCheckout] = useState<Course | null>(null);
   const [activeLearningCourse, setActiveLearningCourse] = useState<Course | null>(null);
@@ -74,7 +77,16 @@ function LMSAppContent() {
     );
   }
 
-  const handleTabChange = (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy') => {
+  // If 3D Game is active: Full-Viewport Game Shell (never renders navbars or footers)
+  if (is3DGameOpen) {
+    return (
+      <MolecularDefenseGame 
+        onExit={() => setIs3DGameOpen(false)} 
+      />
+    );
+  }
+
+  const handleTabChange = (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => {
     setEmbeddedEcosystem(null);
     setActiveTab(tab);
   };
@@ -86,6 +98,7 @@ function LMSAppContent() {
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
         onOpenAuthModal={handleOpenAuth}
+        onLaunchGame={() => setIs3DGameOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -112,6 +125,14 @@ function LMSAppContent() {
                 onSelectCourse={(course) => setActiveLearningCourse(course)}
                 onBrowseCatalog={() => setActiveTab('catalog')}
                 onOpenAuth={handleOpenAuth}
+              />
+            )}
+
+            {activeTab === 'bioscience' && (
+              <BioscienceResearchHub
+                onLaunchGame={() => setIs3DGameOpen(true)}
+                onOpenAuth={handleOpenAuth}
+                onBackToCatalog={() => setActiveTab('catalog')}
               />
             )}
 
@@ -198,6 +219,12 @@ function LMSAppContent() {
                 className={`hover:text-slate-900 transition-colors ${activeTab === 'learning' && !embeddedEcosystem ? 'text-indigo-600 font-semibold' : ''}`}
               >
                 My Learning
+              </button>
+              <button 
+                onClick={() => { handleTabChange('bioscience'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className={`hover:text-slate-900 transition-colors ${activeTab === 'bioscience' && !embeddedEcosystem ? 'text-teal-600 font-semibold' : ''}`}
+              >
+                Bioscience & 3D Lab
               </button>
               <button 
                 onClick={() => { handleTabChange('privacy'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 

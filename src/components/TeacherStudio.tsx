@@ -7,6 +7,7 @@ import { CertificateModal } from './CertificateModal';
 import { GoogleMeetEducatorView } from './GoogleMeetEducatorView';
 import { VideoStudio } from './VideoStudio';
 import { EducatorLectureFeeManager } from './EducatorLectureFeeManager';
+import { TeacherAnalyticsChart } from './TeacherAnalyticsChart';
 import { 
   Plus, 
   Users, 
@@ -33,7 +34,9 @@ import {
   Building2,
   ExternalLink,
   UserCheck,
-  Video
+  Video,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 
 interface TeacherStudioProps {
@@ -59,10 +62,12 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
     revokeCertificate,
     teacherApplications,
     googleMeetSessions,
-    hostedVideos
+    hostedVideos,
+    transactions,
+    educatorBilling
   } = useLms();
 
-  const [activeTab, setActiveTab] = useState<'courses' | 'video-studio' | 'meet' | 'lecture-fees' | 'discussions' | 'announcements' | 'certificates'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'analytics' | 'video-studio' | 'meet' | 'lecture-fees' | 'discussions' | 'announcements' | 'certificates'>('courses');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [publishAlert, setPublishAlert] = useState<string | null>(null);
@@ -503,6 +508,18 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
         </button>
 
         <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
+            activeTab === 'analytics'
+              ? 'bg-white border-t border-x border-slate-200 text-indigo-600 font-bold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-600" />
+          <span>Revenue & Enrollment Trends</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('video-studio')}
           className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
             activeTab === 'video-studio'
@@ -578,6 +595,30 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
       {/* TAB 1: Courses Management */}
       {activeTab === 'courses' && (
         <div className="space-y-6">
+          {/* Recharts Monthly Revenue Growth & Course Enrollment Trends */}
+          <TeacherAnalyticsChart
+            courses={teacherCourses}
+            transactions={transactions}
+            sessions={googleMeetSessions}
+            educatorBilling={educatorBilling}
+            onNavigateToLectureFees={() => setActiveTab('lecture-fees')}
+            onSelectCourse={onSelectCourse}
+          />
+
+          <div className="flex items-center justify-between pt-2">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Active Course Syllabi</h3>
+              <p className="text-xs text-slate-500">Manage curriculum modules, publication state, and lesson content</p>
+            </div>
+            <button
+              onClick={() => setIsCreatingCourse(true)}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create New Course</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {teacherCourses.map(course => (
               <div key={course.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between shadow-sm hover:border-slate-300 transition-all">
@@ -1090,6 +1131,98 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
                       </td>
                     </tr>
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Dedicated Revenue & Enrollment Analytics */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <TeacherAnalyticsChart
+            courses={teacherCourses}
+            transactions={transactions}
+            sessions={googleMeetSessions}
+            educatorBilling={educatorBilling}
+            onNavigateToLectureFees={() => setActiveTab('lecture-fees')}
+            onSelectCourse={onSelectCourse}
+          />
+
+          {/* Detailed Course Monetization & Unit Breakdown Table */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h4 className="text-base font-bold text-slate-900">
+                  Course Monetization & Enrollment Performance Matrix
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Granular unit economics per syllabus showing gross volume, 70% net faculty earnings, and 30% system retention.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab('lecture-fees')}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Lecture Fee Settings</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider font-semibold">
+                    <th className="pb-3 px-3">Course Title</th>
+                    <th className="pb-3 px-3">Unit Price</th>
+                    <th className="pb-3 px-3">Enrolled Learners</th>
+                    <th className="pb-3 px-3">Gross Sales</th>
+                    <th className="pb-3 px-3 text-emerald-700">70% Net Take-Home</th>
+                    <th className="pb-3 px-3 text-amber-700">30% Platform Retention</th>
+                    <th className="pb-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {teacherCourses.map(course => {
+                    const gross = course.studentCount * course.price;
+                    const net = Math.round(gross * 0.70);
+                    const systemFee = gross - net;
+
+                    return (
+                      <tr key={course.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3.5 px-3">
+                          <div className="font-semibold text-slate-900">{course.title}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">{course.category} · {course.level}</div>
+                        </td>
+                        <td className="py-3.5 px-3 font-mono font-semibold text-slate-800">
+                          ${course.price}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono font-bold text-cyan-700">
+                          {course.studentCount} students
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-slate-700">
+                          ${gross.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono font-bold text-emerald-600">
+                          +${net.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-amber-700">
+                          -${systemFee.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <button
+                            onClick={() => setEditingCourse(course)}
+                            className="px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 font-semibold rounded text-xs transition-colors"
+                          >
+                            Edit Pricing
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
