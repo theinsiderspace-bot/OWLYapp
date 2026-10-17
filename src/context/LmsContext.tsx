@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   User,
+  Instructor,
+  CloudSyncState,
   UserRole,
   Course,
   EnrollmentProgress,
@@ -25,6 +27,7 @@ import {
 } from '../types/lms';
 import {
   INITIAL_USERS,
+  INITIAL_INSTRUCTORS,
   INITIAL_COURSES,
   INITIAL_ENROLLMENTS,
   INITIAL_TRANSACTIONS,
@@ -48,22 +51,79 @@ import {
   deleteGoogleCalendarEvent,
   generateMeetCode
 } from '../services/firebaseAuth';
+import {
+  testFirestoreConnection,
+  saveUserToFirestore,
+  deleteUserFromFirestore,
+  syncInitialUsersToFirestore,
+  loadUsersFromFirestore,
+  subscribeToUsers,
+  saveInstructorToFirestore,
+  syncInitialInstructorsToFirestore,
+  loadInstructorsFromFirestore,
+  subscribeToInstructors,
+  saveTeacherApplicationToFirestore,
+  syncInitialTeacherApplicationsToFirestore,
+  loadTeacherApplicationsFromFirestore,
+  subscribeToTeacherApplications,
+  saveRegistrationAuditToFirestore,
+  syncInitialRegistrationsToFirestore,
+  loadRegistrationsFromFirestore,
+  subscribeToRegistrations,
+  deleteUserCascadeFromFirestore,
+  deleteTeacherApplicationFromFirestore,
+  RegistrationAudit,
+  fetchAllFromCloud
+} from '../services/firestoreSync';
 
 interface LmsContextType {
   // User & Persona State
   currentUser: User | null;
   allUsers: User[];
+  registrations: RegistrationAudit[];
   setUserRole: (role: UserRole) => void;
   setCurrentUserById: (userId: string | null) => void;
   signOut: () => void;
   updateUserStatus: (userId: string, status: 'active' | 'suspended') => void;
+  deleteUser: (userId: string) => Promise<boolean>;
+  deleteMultipleUsers: (userIds: string[]) => Promise<boolean>;
+  deleteTeacherApplication: (appId: string) => Promise<boolean>;
+  addUserDirectly: (data: { 
+    name: string; 
+    email: string; 
+    role: UserRole; 
+    title?: string; 
+    bio?: string;
+    institutionOrCompany?: string;
+    skills?: string[];
+    learningGoals?: string[];
+    password?: string;
+    portfolioUrl?: string;
+  }) => Promise<User>;
+
+  // User Profile & Synchronized Database
+  updateUserProfile: (updates: Partial<User>, targetUserId?: string) => Promise<User | null>;
+  saveUserProfileToFirestore: (user: User) => Promise<boolean>;
+  enhanceUserProfileWithAI: () => Promise<any>;
+
+  // Instructor Database
+  instructors: Instructor[];
+  getInstructorById: (instructorId: string) => Instructor | undefined;
+  getInstructorByUserId: (userId: string) => Instructor | undefined;
+  updateInstructorProfile: (instructorId: string, updates: Partial<Instructor>) => Promise<void>;
+  matchInstructorsWithAI: (query: string, studentLevel?: string) => Promise<any>;
+
+  // Cloud & Multi-Client Sync
+  cloudSyncState: CloudSyncState;
+  forceCloudSync: () => Promise<any>;
 
   // Sign up & Teacher Verification
   teacherApplications: TeacherApplication[];
-  signUpStudent: (data: { name: string; email: string; title?: string; bio?: string }) => User;
+  signUpStudent: (data: { name: string; email: string; password?: string; title?: string; bio?: string }) => Promise<User>;
   signUpTeacher: (data: {
     name: string;
     email: string;
+    password?: string;
     academicTitle: string;
     institutionOrCompany: string;
     primaryDomain: string;
@@ -71,7 +131,7 @@ interface LmsContextType {
     portfolioUrl?: string;
     credentialsSummary: string;
     proposedCourseTopic: string;
-  }) => { user: User; application: TeacherApplication };
+  }) => Promise<{ user: User; application: TeacherApplication }>;
   applyAsTeacher: (data: {
     academicTitle: string;
     institutionOrCompany: string;
@@ -80,7 +140,8 @@ interface LmsContextType {
     portfolioUrl?: string;
     credentialsSummary: string;
     proposedCourseTopic: string;
-  }) => TeacherApplication;
+    password?: string;
+  }) => Promise<TeacherApplication>;
   approveTeacherApplication: (applicationId: string, reviewNotes?: string) => void;
   rejectTeacherApplication: (applicationId: string, reviewNotes?: string) => void;
 
@@ -213,6 +274,7 @@ const LmsContext = createContext<LmsContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   USERS: 'aetheria_lms_users_v1',
+  REGISTRATIONS: 'aetheria_lms_registrations_v1',
   ACTIVE_ROLE: 'aetheria_lms_active_role_v2',
   ACTIVE_USER_ID: 'aetheria_lms_active_user_id_v2',
   COURSES: 'aetheria_lms_courses_v1',
@@ -226,7 +288,8 @@ const STORAGE_KEYS = {
   PAYOUTS: 'aetheria_lms_payouts_v1',
   AI_RECOMMENDATIONS: 'aetheria_lms_ai_recs_v1',
   HOSTED_VIDEOS: 'aetheria_lms_hosted_videos_v1',
-  ASSIGNMENT_SUBMISSIONS: 'aetheria_lms_submissions_v1'
+  ASSIGNMENT_SUBMISSIONS: 'aetheria_lms_submissions_v1',
+  INSTRUCTORS: 'aetheria_lms_instructors_v1'
 };
 
 export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -266,6 +329,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return users;
     } catch {
       return INITIAL_USERS;
+    }
+  });
+
+  const [registrations, setRegistrations] = useState<RegistrationAudit[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -418,6 +490,34 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, [assignmentSubmissions]);
 
+  // Instructor Database State
+  const [instructors, setInstructors] = useState<Instructor[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.INSTRUCTORS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return INITIAL_INSTRUCTORS;
+    } catch {
+      return INITIAL_INSTRUCTORS;
+    }
+  });
+
+  // Cloud & Local Sync State tracking
+  const [cloudSyncState, setCloudSyncState] = useState<CloudSyncState>({
+    status: 'synced',
+    lastSyncedAt: new Date().toLocaleTimeString(),
+    pendingMutationsCount: 0,
+    error: null
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(instructors));
+    } catch {}
+  }, [instructors]);
+
   // Embedded Ecosystem state: OWLY SAT & OWLY IELTS loaded inside same iframe with no links displayed
   const [embeddedEcosystem, setEmbeddedEcosystem] = useState<'sat' | 'ielts' | null>(null);
 
@@ -510,6 +610,262 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.HOSTED_VIDEOS, JSON.stringify(hostedVideos));
   }, [hostedVideos]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(registrations));
+  }, [registrations]);
+
+  // Firestore connection test and real-time multi-tab & cloud synchronization
+  useEffect(() => {
+    let isMounted = true;
+    const unsubs: (() => void)[] = [];
+
+    // Remote-authoritative mergers that prioritize live Cloud Firestore records
+    const mergeUsersFromRemote = (local: User[], remote: User[]): User[] => {
+      const remoteIds = new Set(remote.map(r => r.id));
+      const remoteEmails = new Set(remote.map(r => r.email.toLowerCase()));
+
+      const list: User[] = [...remote];
+
+      // Guarantee Super Admin exists
+      const hasSuperAdmin = list.some(u => u.email.toLowerCase() === 'theinsiderspace@gmail.com');
+      if (!hasSuperAdmin) {
+        const localAdmin = local.find(u => u.email.toLowerCase() === 'theinsiderspace@gmail.com');
+        if (localAdmin) list.push(localAdmin);
+      }
+
+      // Preserve newly registered local user if not yet reflected in snapshot, excluding deleted mock users
+      local.forEach(loc => {
+        if (!remoteIds.has(loc.id) && !remoteEmails.has(loc.email.toLowerCase())) {
+          const isHardcodedDemo = ['user-student-1', 'user-student-2', 'user-student-3', 'user-student-4', 'user-teacher-1'].includes(loc.id);
+          if (!isHardcodedDemo && (loc.id.startsWith('user-student-') || loc.id.startsWith('user-teacher-') || loc.id.startsWith('user-admin-'))) {
+            list.unshift(loc);
+          }
+        }
+      });
+
+      // Sort with newest registrations first
+      return list.sort((a, b) => {
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.id.match(/\d{10,}/) ? parseInt(a.id.match(/\d{10,}/)![0]) : new Date(a.joinedDate).getTime() || 0);
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.id.match(/\d{10,}/) ? parseInt(b.id.match(/\d{10,}/)![0]) : new Date(b.joinedDate).getTime() || 0);
+        return timeB - timeA;
+      });
+    };
+
+    const mergeTeacherAppsFromRemote = (local: TeacherApplication[], remote: TeacherApplication[]): TeacherApplication[] => {
+      const remoteIds = new Set(remote.map(r => r.id));
+      const list = [...remote];
+      local.forEach(loc => {
+        if (!remoteIds.has(loc.id)) {
+          list.push(loc);
+        }
+      });
+      return list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    };
+
+    const mergeInstructorsFromRemote = (local: Instructor[], remote: Instructor[]): Instructor[] => {
+      const remoteIds = new Set(remote.map(r => r.id));
+      const list = [...remote];
+      local.forEach(loc => {
+        if (!remoteIds.has(loc.id)) {
+          list.push(loc);
+        }
+      });
+      return list;
+    };
+
+    const mergeRegistrationsFromRemote = (local: RegistrationAudit[], remote: RegistrationAudit[]): RegistrationAudit[] => {
+      const remoteIds = new Set(remote.map(r => r.id));
+      const list = [...remote];
+      local.forEach(loc => {
+        if (!remoteIds.has(loc.id)) {
+          list.push(loc);
+        }
+      });
+      return list.sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime());
+    };
+
+    // 1. Eagerly attach real-time Firestore listeners immediately on mount
+    // A. Real-time Users Subscription
+    const unsubUsers = subscribeToUsers(
+      (remoteUsers) => {
+        if (!isMounted || !remoteUsers) return;
+        setAllUsers(prev => {
+          const merged = mergeUsersFromRemote(prev, remoteUsers);
+          try {
+            localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+        setCloudSyncState(prev => ({
+          ...prev,
+          status: 'synced',
+          lastSyncedAt: new Date().toLocaleTimeString(),
+          error: null
+        }));
+      },
+      (err) => console.warn('Users Firestore subscription notice:', err)
+    );
+    unsubs.push(unsubUsers);
+
+    // B. Real-time Teacher Applications Subscription
+    const unsubApps = subscribeToTeacherApplications(
+      (remoteApps) => {
+        if (!isMounted || !remoteApps) return;
+        setTeacherApplications(prev => {
+          const merged = mergeTeacherAppsFromRemote(prev, remoteApps);
+          try {
+            localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      },
+      (err) => console.warn('Teacher Applications Firestore subscription notice:', err)
+    );
+    unsubs.push(unsubApps);
+
+    // C. Real-time Instructors Subscription
+    const unsubInstructors = subscribeToInstructors(
+      (remoteInstructors) => {
+        if (!isMounted || !remoteInstructors) return;
+        setInstructors(prev => {
+          const merged = mergeInstructorsFromRemote(prev, remoteInstructors);
+          try {
+            localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+        setCloudSyncState(prev => ({
+          ...prev,
+          status: 'synced',
+          lastSyncedAt: new Date().toLocaleTimeString(),
+          error: null
+        }));
+      },
+      (err) => console.warn('Instructors Firestore subscription notice:', err)
+    );
+    unsubs.push(unsubInstructors);
+
+    // D. Real-time Registrations Audit Log Subscription
+    const unsubRegistrations = subscribeToRegistrations(
+      (remoteRegs) => {
+        if (!isMounted || !remoteRegs) return;
+        setRegistrations(prev => {
+          const merged = mergeRegistrationsFromRemote(prev, remoteRegs);
+          try {
+            localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      },
+      (err) => console.warn('Registrations Firestore subscription notice:', err)
+    );
+    unsubs.push(unsubRegistrations);
+
+    // 2. Proactive initial pull & initial seeding
+    const syncBootData = async () => {
+      try {
+        // Proactively fetch all remote entities from both server-side cloud API and client Firestore
+        const [cloudData, rUsers, rApps, rInstructors, rRegs] = await Promise.allSettled([
+          fetchAllFromCloud(),
+          loadUsersFromFirestore(),
+          loadTeacherApplicationsFromFirestore(),
+          loadInstructorsFromFirestore(),
+          loadRegistrationsFromFirestore()
+        ]);
+
+        if (!isMounted) return;
+
+        const resolvedUsers = (rUsers.status === 'fulfilled' && rUsers.value && rUsers.value.length > 0)
+          ? rUsers.value
+          : (cloudData.status === 'fulfilled' && cloudData.value?.users) || [];
+
+        const resolvedApps = (rApps.status === 'fulfilled' && rApps.value && rApps.value.length > 0)
+          ? rApps.value
+          : (cloudData.status === 'fulfilled' && cloudData.value?.teacherApplications) || [];
+
+        const resolvedInstructors = (rInstructors.status === 'fulfilled' && rInstructors.value && rInstructors.value.length > 0)
+          ? rInstructors.value
+          : (cloudData.status === 'fulfilled' && cloudData.value?.instructors) || [];
+
+        const resolvedRegs = (rRegs.status === 'fulfilled' && rRegs.value && rRegs.value.length > 0)
+          ? rRegs.value
+          : (cloudData.status === 'fulfilled' && cloudData.value?.registrations) || [];
+
+        if (resolvedUsers.length > 0) {
+          setAllUsers(prev => {
+            const merged = mergeUsersFromRemote(prev, resolvedUsers);
+            try { localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        }
+
+        if (resolvedApps.length > 0) {
+          setTeacherApplications(prev => {
+            const merged = mergeTeacherAppsFromRemote(prev, resolvedApps);
+            try { localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        }
+
+        if (resolvedInstructors.length > 0) {
+          setInstructors(prev => {
+            const merged = mergeInstructorsFromRemote(prev, resolvedInstructors);
+            try { localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        }
+
+        if (resolvedRegs.length > 0) {
+          setRegistrations(prev => {
+            const merged = mergeRegistrationsFromRemote(prev, resolvedRegs);
+            try { localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        }
+
+        setCloudSyncState({
+          status: 'synced',
+          lastSyncedAt: new Date().toLocaleTimeString(),
+          pendingMutationsCount: 0,
+          error: null
+        });
+      } catch (err: any) {
+        console.warn('Initial Firestore boot sync warning:', err);
+      }
+    };
+
+    syncBootData();
+
+    // Multi-tab storage event synchronization to fix cross-tab sync issues
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === STORAGE_KEYS.USERS && e.newValue) {
+        try { setAllUsers(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === STORAGE_KEYS.REGISTRATIONS && e.newValue) {
+        try { setRegistrations(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === STORAGE_KEYS.TEACHER_APPLICATIONS && e.newValue) {
+        try { setTeacherApplications(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === STORAGE_KEYS.INSTRUCTORS && e.newValue) {
+        try { setInstructors(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === STORAGE_KEYS.COURSES && e.newValue) {
+        try { setCourses(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === STORAGE_KEYS.ACTIVE_USER_ID) {
+        setActiveUserId(e.newValue || null);
+      } else if (e.key === STORAGE_KEYS.ACTIVE_ROLE && e.newValue) {
+        setActiveRole(e.newValue as any);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      isMounted = false;
+      unsubs.forEach(unsubFn => {
+        if (typeof unsubFn === 'function') unsubFn();
+      });
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   // Role switching
   const setUserRole = (role: UserRole) => {
     setActiveRole(role);
@@ -544,16 +900,509 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateUserStatus = (userId: string, status: 'active' | 'suspended') => {
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, status } : u));
+    setAllUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        const mod = { ...u, status };
+        saveUserToFirestore(mod);
+        return mod;
+      }
+      return u;
+    }));
+  };
+
+  const deleteUser = async (userId: string): Promise<boolean> => {
+    // Safety guard: Super Admin master root account cannot be deleted
+    const targetUser = allUsers.find(u => u.id === userId);
+    if (targetUser?.email?.toLowerCase() === 'theinsiderspace@gmail.com') {
+      console.warn('Super Admin root master account cannot be deleted.');
+      return false;
+    }
+
+    setAllUsers(prev => {
+      const updated = prev.filter(u => u.id !== userId);
+      try { localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    // Cascade clean matching instructors, teacher applications, and registrations
+    setInstructors(prev => {
+      const updated = prev.filter(i => i.userId !== userId && i.id !== userId);
+      try { localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setTeacherApplications(prev => {
+      const updated = prev.filter(a => a.userId !== userId);
+      try { localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setRegistrations(prev => {
+      const updated = prev.filter(r => r.userId !== userId);
+      try { localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    if (activeUserId === userId) {
+      signOut();
+    }
+
+    return await deleteUserCascadeFromFirestore(userId);
+  };
+
+  const deleteMultipleUsers = async (userIds: string[]): Promise<boolean> => {
+    // Filter out root admin
+    const validIds = userIds.filter(id => {
+      const u = allUsers.find(user => user.id === id);
+      return u?.email?.toLowerCase() !== 'theinsiderspace@gmail.com';
+    });
+
+    if (validIds.length === 0) return false;
+
+    setAllUsers(prev => {
+      const updated = prev.filter(u => !validIds.includes(u.id));
+      try { localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setInstructors(prev => {
+      const updated = prev.filter(i => !validIds.includes(i.userId) && !validIds.includes(i.id));
+      try { localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setTeacherApplications(prev => {
+      const updated = prev.filter(a => !validIds.includes(a.userId));
+      try { localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setRegistrations(prev => {
+      const updated = prev.filter(r => !validIds.includes(r.userId));
+      try { localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    for (const uid of validIds) {
+      await deleteUserCascadeFromFirestore(uid);
+    }
+
+    return true;
+  };
+
+  const deleteTeacherApplication = async (appId: string): Promise<boolean> => {
+    setTeacherApplications(prev => {
+      const updated = prev.filter(a => a.id !== appId);
+      try { localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    return await deleteTeacherApplicationFromFirestore(appId);
+  };
+
+  const addUserDirectly = async (data: { 
+    name: string; 
+    email: string; 
+    role: UserRole; 
+    title?: string; 
+    bio?: string;
+    institutionOrCompany?: string;
+    skills?: string[];
+    learningGoals?: string[];
+    password?: string;
+    portfolioUrl?: string;
+  }): Promise<User> => {
+    const initials = data.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'US';
+    const nowIso = new Date().toISOString();
+    const newUser: User = {
+      id: `user-${data.role}-${Date.now()}`,
+      name: data.name.trim(),
+      email: data.email.trim(),
+      password: data.password?.trim() || undefined,
+      role: data.role,
+      avatarText: initials,
+      title: data.title?.trim() || (data.role === 'teacher' ? 'Faculty Instructor' : 'Technical Learner'),
+      bio: data.bio?.trim() || 'Verified member at OWLY Academy.',
+      institutionOrCompany: data.institutionOrCompany?.trim(),
+      skills: data.skills || [],
+      learningGoals: data.learningGoals || [],
+      socialLinks: data.portfolioUrl ? { website: data.portfolioUrl.trim() } : undefined,
+      enrolledCourseIds: [],
+      totalSpent: 0,
+      joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      status: 'active',
+      teacherVerificationStatus: data.role === 'teacher' ? 'approved' : undefined,
+      updatedAt: nowIso
+    };
+
+    setAllUsers(prev => [newUser, ...prev]);
+    await saveUserToFirestore(newUser);
+
+    if (data.role === 'teacher') {
+      const newInst: Instructor = {
+        id: `inst-${Date.now()}`,
+        userId: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        avatarText: newUser.avatarText,
+        academicTitle: newUser.title || 'Faculty Instructor',
+        institutionOrCompany: data.institutionOrCompany?.trim() || 'OWLY Academy',
+        primaryDomain: 'Computer Science & AI',
+        specialties: data.skills && data.skills.length > 0 ? data.skills : ['Technical Masterclasses'],
+        bio: newUser.bio || 'Verified faculty member.',
+        credentialsSummary: 'Accredited by platform administration.',
+        portfolioUrl: data.portfolioUrl?.trim(),
+        verificationStatus: 'approved',
+        rating: 5.0,
+        reviewCount: 0,
+        studentCount: 0,
+        courseIds: [],
+        featured: false,
+        joinedDate: newUser.joinedDate,
+        updatedAt: nowIso
+      };
+      setInstructors(prev => [newInst, ...prev]);
+      await saveInstructorToFirestore(newInst);
+    }
+
+    await saveRegistrationAuditToFirestore({
+      id: `reg-${Date.now()}`,
+      userId: newUser.id,
+      userName: newUser.name,
+      userEmail: newUser.email,
+      role: newUser.role,
+      registeredAt: nowIso,
+      registrationType: 'manual_admin'
+    });
+    return newUser;
+  };
+
+  // User Profile Update with Automatic Relational Sync across Courses & Instructors
+  const updateUserProfile = async (updates: Partial<User>, targetUserId?: string): Promise<User | null> => {
+    const idToUpdate = targetUserId || activeUserId;
+    if (!idToUpdate) return null;
+
+    const existingUser = allUsers.find(u => u.id === idToUpdate);
+    const updatedUserResult: User = existingUser
+      ? {
+          ...existingUser,
+          ...updates,
+          updatedAt: new Date().toISOString()
+        }
+      : {
+          id: idToUpdate,
+          name: updates.name || 'User',
+          email: updates.email || '',
+          role: updates.role || 'student',
+          avatarText: 'US',
+          enrolledCourseIds: [],
+          totalSpent: 0,
+          joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          status: 'active',
+          ...updates,
+          updatedAt: new Date().toISOString()
+        };
+
+    setAllUsers(prev => prev.map(u => (u.id === idToUpdate ? updatedUserResult : u)));
+
+    // 1. Sync with Instructors database if this user is a teacher / faculty member
+    setInstructors(prev => prev.map(inst => {
+      if (inst.userId === idToUpdate) {
+        const updatedInst: Instructor = {
+          ...inst,
+          name: updates.name || inst.name,
+          academicTitle: updates.title || inst.academicTitle,
+          bio: updates.bio || inst.bio,
+          avatarText: updates.avatarText || inst.avatarText,
+          avatarUrl: updates.avatarUrl !== undefined ? updates.avatarUrl : inst.avatarUrl,
+          institutionOrCompany: updates.institutionOrCompany || inst.institutionOrCompany,
+          specialties: updates.skills || inst.specialties,
+          portfolioUrl: updates.socialLinks?.website || updates.socialLinks?.googleScholar || inst.portfolioUrl,
+          updatedAt: new Date().toISOString()
+        };
+        saveInstructorToFirestore(updatedInst);
+        return updatedInst;
+      }
+      return inst;
+    }));
+
+    // 2. Sync Course catalog metadata (fixing the out-of-sync instructor details on authored courses!)
+    setCourses(prev => prev.map(course => {
+      if (course.instructorId === idToUpdate) {
+        return {
+          ...course,
+          instructorName: updates.name || course.instructorName,
+          instructorTitle: updates.title || course.instructorTitle,
+          instructorBio: updates.bio || course.instructorBio
+        };
+      }
+      return course;
+    }));
+
+    // 3. Save User Profile directly to Firestore
+    setCloudSyncState(prev => ({ ...prev, status: 'syncing' }));
+    const saved = await saveUserToFirestore(updatedUserResult);
+    setCloudSyncState(prev => ({
+      ...prev,
+      status: saved ? 'synced' : 'offline',
+      lastSyncedAt: new Date().toLocaleTimeString(),
+      error: saved ? null : 'Saved locally (Firestore write notice)'
+    }));
+
+    return updatedUserResult;
+  };
+
+  // Instructor Profile Update
+  const updateInstructorProfile = async (instructorId: string, updates: Partial<Instructor>) => {
+    let targetInst: Instructor | null = null;
+    setInstructors(prev => prev.map(inst => {
+      if (inst.id === instructorId) {
+        targetInst = {
+          ...inst,
+          ...updates,
+          updatedAt: new Date().toISOString()
+        };
+        return targetInst;
+      }
+      return inst;
+    }));
+
+    if (!targetInst) return;
+
+    // Sync underlying user record
+    setAllUsers(prev => prev.map(u => {
+      if (u.id === targetInst!.userId) {
+        return {
+          ...u,
+          name: updates.name || u.name,
+          title: updates.academicTitle || u.title,
+          bio: updates.bio || u.bio,
+          avatarText: updates.avatarText || u.avatarText,
+          avatarUrl: updates.avatarUrl !== undefined ? updates.avatarUrl : u.avatarUrl,
+          institutionOrCompany: updates.institutionOrCompany || u.institutionOrCompany,
+          skills: updates.specialties || u.skills,
+          teacherVerificationStatus: updates.verificationStatus || u.teacherVerificationStatus
+        };
+      }
+      return u;
+    }));
+
+    // Sync courses
+    setCourses(prev => prev.map(course => {
+      if (course.instructorId === targetInst!.userId) {
+        return {
+          ...course,
+          instructorName: updates.name || course.instructorName,
+          instructorTitle: updates.academicTitle || course.instructorTitle,
+          instructorBio: updates.bio || course.instructorBio
+        };
+      }
+      return course;
+    }));
+
+    // Save to Firestore
+    setCloudSyncState(prev => ({ ...prev, status: 'syncing' }));
+    const saved = await saveInstructorToFirestore(targetInst);
+    setCloudSyncState(prev => ({
+      ...prev,
+      status: saved ? 'synced' : 'offline',
+      lastSyncedAt: new Date().toLocaleTimeString()
+    }));
+  };
+
+  const getInstructorById = (instructorId: string) => {
+    return instructors.find(i => i.id === instructorId);
+  };
+
+  const getInstructorByUserId = (userId: string) => {
+    return instructors.find(i => i.userId === userId);
+  };
+
+  const enhanceUserProfileWithAI = async () => {
+    if (!currentUser) return null;
+    try {
+      const res = await fetch('/api/profile-ai/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: currentUser.name,
+          role: currentUser.role,
+          title: currentUser.title,
+          bio: currentUser.bio,
+          currentSkills: currentUser.skills,
+          learningGoals: currentUser.learningGoals
+        })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      return null;
+    } catch (e) {
+      console.warn('enhanceUserProfileWithAI error:', e);
+      return null;
+    }
+  };
+
+  const matchInstructorsWithAI = async (query: string, studentLevel?: string) => {
+    try {
+      const res = await fetch('/api/instructors/ai-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          instructors,
+          studentLevel
+        })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      return null;
+    } catch (e) {
+      console.warn('matchInstructorsWithAI error:', e);
+      return null;
+    }
+  };
+
+  const forceCloudSync = async () => {
+    setCloudSyncState(prev => ({ ...prev, status: 'syncing', error: null }));
+    try {
+      // 1. Proactively pull all remote records from both Cloud Firestore and Server API
+      const [cloudData, rUsers, rApps, rInstructors, rRegs] = await Promise.allSettled([
+        fetchAllFromCloud(),
+        loadUsersFromFirestore(),
+        loadTeacherApplicationsFromFirestore(),
+        loadInstructorsFromFirestore(),
+        loadRegistrationsFromFirestore()
+      ]);
+
+      const resolvedUsers = (rUsers.status === 'fulfilled' && rUsers.value && rUsers.value.length > 0)
+        ? rUsers.value
+        : (cloudData.status === 'fulfilled' && cloudData.value?.users) || [];
+
+      const resolvedApps = (rApps.status === 'fulfilled' && rApps.value && rApps.value.length > 0)
+        ? rApps.value
+        : (cloudData.status === 'fulfilled' && cloudData.value?.teacherApplications) || [];
+
+      const resolvedInstructors = (rInstructors.status === 'fulfilled' && rInstructors.value && rInstructors.value.length > 0)
+        ? rInstructors.value
+        : (cloudData.status === 'fulfilled' && cloudData.value?.instructors) || [];
+
+      const resolvedRegs = (rRegs.status === 'fulfilled' && rRegs.value && rRegs.value.length > 0)
+        ? rRegs.value
+        : (cloudData.status === 'fulfilled' && cloudData.value?.registrations) || [];
+
+      let finalUsers = allUsers;
+      if (resolvedUsers.length > 0) {
+        const remoteIds = new Set(resolvedUsers.map(r => r.id));
+        const remoteEmails = new Set(resolvedUsers.map(r => r.email.toLowerCase()));
+        const list = [...resolvedUsers];
+        allUsers.forEach(loc => {
+          if (!remoteIds.has(loc.id) && !remoteEmails.has(loc.email.toLowerCase())) {
+            const isHardcodedDemo = ['user-student-1', 'user-student-2', 'user-student-3', 'user-student-4', 'user-teacher-1'].includes(loc.id);
+            if (!isHardcodedDemo && (loc.id.startsWith('user-student-') || loc.id.startsWith('user-teacher-') || loc.id.startsWith('user-admin-'))) {
+              list.unshift(loc);
+            }
+          }
+        });
+        finalUsers = list.sort((a, b) => {
+          const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.id.match(/\d{10,}/) ? parseInt(a.id.match(/\d{10,}/)![0]) : new Date(a.joinedDate).getTime() || 0);
+          const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.id.match(/\d{10,}/) ? parseInt(b.id.match(/\d{10,}/)![0]) : new Date(b.joinedDate).getTime() || 0);
+          return timeB - timeA;
+        });
+        setAllUsers(finalUsers);
+        try { localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(finalUsers)); } catch {}
+      }
+
+      let finalApps = teacherApplications;
+      if (resolvedApps.length > 0) {
+        const remoteIds = new Set(resolvedApps.map(r => r.id));
+        const list = [...resolvedApps];
+        teacherApplications.forEach(loc => {
+          if (!remoteIds.has(loc.id)) list.push(loc);
+        });
+        finalApps = list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        setTeacherApplications(finalApps);
+        try { localStorage.setItem(STORAGE_KEYS.TEACHER_APPLICATIONS, JSON.stringify(finalApps)); } catch {}
+      }
+
+      let finalInstructors = instructors;
+      if (resolvedInstructors.length > 0) {
+        const remoteIds = new Set(resolvedInstructors.map(r => r.id));
+        const list = [...resolvedInstructors];
+        instructors.forEach(loc => {
+          if (!remoteIds.has(loc.id)) list.push(loc);
+        });
+        finalInstructors = list;
+        setInstructors(finalInstructors);
+        try { localStorage.setItem(STORAGE_KEYS.INSTRUCTORS, JSON.stringify(finalInstructors)); } catch {}
+      }
+
+      let finalRegs = registrations;
+      if (resolvedRegs.length > 0) {
+        const remoteIds = new Set(resolvedRegs.map(r => r.id));
+        const list = [...resolvedRegs];
+        registrations.forEach(loc => {
+          if (!remoteIds.has(loc.id)) list.push(loc);
+        });
+        finalRegs = list.sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime());
+        setRegistrations(finalRegs);
+        try { localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(finalRegs)); } catch {}
+      }
+
+      // 2. Push any legitimate non-demo records to Firestore
+      for (const u of finalUsers) {
+        const isHardcodedDemo = ['user-student-1', 'user-student-2', 'user-student-3', 'user-student-4', 'user-teacher-1'].includes(u.id);
+        if (!isHardcodedDemo) {
+          await saveUserToFirestore(u);
+        }
+      }
+      for (const inst of finalInstructors) {
+        await saveInstructorToFirestore(inst);
+      }
+      for (const app of finalApps) {
+        await saveTeacherApplicationToFirestore(app);
+      }
+      for (const reg of finalRegs) {
+        await saveRegistrationAuditToFirestore(reg);
+      }
+
+      setCloudSyncState({
+        status: 'synced',
+        lastSyncedAt: new Date().toLocaleTimeString(),
+        pendingMutationsCount: 0,
+        error: null
+      });
+
+      return {
+        success: true,
+        usersCount: finalUsers.length,
+        appsCount: finalApps.length,
+        regsCount: finalRegs.length
+      };
+    } catch (err: any) {
+      setCloudSyncState(prev => ({
+        ...prev,
+        status: 'error',
+        error: err.message || 'Sync failed'
+      }));
+      return {
+        success: false,
+        usersCount: allUsers.length,
+        appsCount: teacherApplications.length,
+        regsCount: registrations.length
+      };
+    }
   };
 
   // Sign up & Teacher Verification
-  const signUpStudent = (data: { name: string; email: string; title?: string; bio?: string }): User => {
+  const signUpStudent = async (data: { name: string; email: string; password?: string; title?: string; bio?: string }): Promise<User> => {
     const initials = data.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'ST';
+    const nowIso = new Date().toISOString();
     const newStudent: User = {
       id: `user-student-${Date.now()}`,
       name: data.name.trim(),
       email: data.email.trim(),
+      password: data.password?.trim() || undefined,
       role: 'student',
       avatarText: initials,
       title: data.title?.trim() || 'Software Engineer',
@@ -561,18 +1410,38 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       enrolledCourseIds: [],
       totalSpent: 0,
       joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      status: 'active'
+      status: 'active',
+      updatedAt: nowIso
     };
 
-    setAllUsers(prev => [newStudent, ...prev]);
+    setAllUsers(prev => [newStudent, ...prev.filter(u => u.id !== newStudent.id)]);
     setActiveUserId(newStudent.id);
     setActiveRole('student');
+
+    const regAudit: RegistrationAudit = {
+      id: `reg-${Date.now()}`,
+      userId: newStudent.id,
+      userName: newStudent.name,
+      userEmail: newStudent.email,
+      role: 'student',
+      registeredAt: nowIso,
+      registrationType: 'student_signup'
+    };
+    setRegistrations(prev => [regAudit, ...prev.filter(r => r.id !== regAudit.id)]);
+
+    // Guarantee persistence across both client SDK and server-side cloud DB
+    await Promise.allSettled([
+      saveUserToFirestore(newStudent),
+      saveRegistrationAuditToFirestore(regAudit)
+    ]);
+
     return newStudent;
   };
 
-  const signUpTeacher = (data: {
+  const signUpTeacher = async (data: {
     name: string;
     email: string;
+    password?: string;
     academicTitle: string;
     institutionOrCompany: string;
     primaryDomain: string;
@@ -580,10 +1449,11 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     portfolioUrl?: string;
     credentialsSummary: string;
     proposedCourseTopic: string;
-  }): { user: User; application: TeacherApplication } => {
+  }): Promise<{ user: User; application: TeacherApplication }> => {
     const appId = `app-teacher-${Date.now()}`;
     const userId = `user-teacher-${Date.now()}`;
     const initials = data.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'TC';
+    const nowIso = new Date().toISOString();
 
     const newApp: TeacherApplication = {
       id: appId,
@@ -597,7 +1467,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       portfolioUrl: data.portfolioUrl?.trim(),
       credentialsSummary: data.credentialsSummary.trim(),
       proposedCourseTopic: data.proposedCourseTopic.trim(),
-      submittedAt: new Date().toISOString(),
+      submittedAt: nowIso,
       status: 'pending_approval'
     };
 
@@ -605,26 +1475,74 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: userId,
       name: data.name.trim(),
       email: data.email.trim(),
+      password: data.password?.trim() || undefined,
       role: 'teacher',
       avatarText: initials,
       title: data.academicTitle.trim(),
       bio: data.bio.trim(),
+      institutionOrCompany: data.institutionOrCompany.trim(),
       enrolledCourseIds: [],
       totalSpent: 0,
       joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       status: 'active',
       teacherVerificationStatus: 'pending_approval',
-      teacherApplicationId: appId
+      teacherApplicationId: appId,
+      updatedAt: nowIso
     };
 
-    setTeacherApplications(prev => [newApp, ...prev]);
-    setAllUsers(prev => [newTeacher, ...prev]);
+    const newInst: Instructor = {
+      id: `inst-${Date.now()}`,
+      userId: newTeacher.id,
+      name: newTeacher.name,
+      email: newTeacher.email,
+      avatarText: initials,
+      academicTitle: data.academicTitle.trim(),
+      institutionOrCompany: data.institutionOrCompany.trim(),
+      primaryDomain: data.primaryDomain.trim(),
+      specialties: [data.primaryDomain.trim(), data.proposedCourseTopic.trim()].filter(Boolean),
+      bio: data.bio.trim(),
+      credentialsSummary: data.credentialsSummary.trim(),
+      portfolioUrl: data.portfolioUrl?.trim(),
+      verificationStatus: 'pending_approval',
+      rating: 5.0,
+      reviewCount: 0,
+      studentCount: 0,
+      courseIds: [],
+      officeHoursSchedule: 'Tuesdays & Thursdays, 16:00 - 18:00 UTC',
+      featured: false,
+      joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      updatedAt: nowIso
+    };
+
+    setTeacherApplications(prev => [newApp, ...prev.filter(a => a.id !== newApp.id)]);
+    setAllUsers(prev => [newTeacher, ...prev.filter(u => u.id !== newTeacher.id)]);
+    setInstructors(prev => [newInst, ...prev.filter(i => i.id !== newInst.id)]);
     setActiveUserId(newTeacher.id);
     setActiveRole('teacher');
+
+    const regAudit: RegistrationAudit = {
+      id: `reg-${Date.now()}`,
+      userId: newTeacher.id,
+      userName: newTeacher.name,
+      userEmail: newTeacher.email,
+      role: 'teacher',
+      registeredAt: nowIso,
+      registrationType: 'teacher_application'
+    };
+    setRegistrations(prev => [regAudit, ...prev.filter(r => r.id !== regAudit.id)]);
+
+    // Guarantee persistence across both client SDK and server-side cloud DB
+    await Promise.allSettled([
+      saveUserToFirestore(newTeacher),
+      saveTeacherApplicationToFirestore(newApp),
+      saveInstructorToFirestore(newInst),
+      saveRegistrationAuditToFirestore(regAudit)
+    ]);
+
     return { user: newTeacher, application: newApp };
   };
 
-  const applyAsTeacher = (data: {
+  const applyAsTeacher = async (data: {
     academicTitle: string;
     institutionOrCompany: string;
     primaryDomain: string;
@@ -632,9 +1550,11 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     portfolioUrl?: string;
     credentialsSummary: string;
     proposedCourseTopic: string;
-  }): TeacherApplication => {
+    password?: string;
+  }): Promise<TeacherApplication> => {
     const user = currentUser || INITIAL_USERS[0];
     const appId = `app-teacher-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const newApp: TeacherApplication = {
       id: appId,
       userId: user.id,
@@ -647,26 +1567,78 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       portfolioUrl: data.portfolioUrl?.trim(),
       credentialsSummary: data.credentialsSummary.trim(),
       proposedCourseTopic: data.proposedCourseTopic.trim(),
-      submittedAt: new Date().toISOString(),
+      submittedAt: nowIso,
       status: 'pending_approval'
     };
 
-    setTeacherApplications(prev => [newApp, ...prev]);
-    setAllUsers(prev => prev.map(u => {
-      if (u.id === user.id) {
-        return {
-          ...u,
-          role: 'teacher' as UserRole,
-          title: data.academicTitle.trim(),
-          bio: data.bio.trim(),
-          teacherVerificationStatus: 'pending_approval',
-          teacherApplicationId: appId
-        };
+    const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'TC';
+    const newInst: Instructor = {
+      id: `inst-${Date.now()}`,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      avatarText: initials,
+      academicTitle: data.academicTitle.trim(),
+      institutionOrCompany: data.institutionOrCompany.trim(),
+      primaryDomain: data.primaryDomain.trim(),
+      specialties: [data.primaryDomain.trim(), data.proposedCourseTopic.trim()].filter(Boolean),
+      bio: data.bio.trim(),
+      credentialsSummary: data.credentialsSummary.trim(),
+      portfolioUrl: data.portfolioUrl?.trim(),
+      verificationStatus: 'pending_approval',
+      rating: 5.0,
+      reviewCount: 0,
+      studentCount: 0,
+      courseIds: [],
+      officeHoursSchedule: 'Tuesdays & Thursdays, 16:00 - 18:00 UTC',
+      featured: false,
+      joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      updatedAt: nowIso
+    };
+
+    const updatedUser: User = {
+      ...user,
+      role: 'teacher' as UserRole,
+      password: data.password?.trim() || user.password,
+      title: data.academicTitle.trim(),
+      institutionOrCompany: data.institutionOrCompany.trim(),
+      bio: data.bio.trim(),
+      teacherVerificationStatus: 'pending_approval',
+      teacherApplicationId: appId,
+      updatedAt: nowIso
+    };
+
+    setTeacherApplications(prev => [newApp, ...prev.filter(a => a.id !== newApp.id)]);
+    setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+    setInstructors(prev => {
+      const exists = prev.some(i => i.userId === user.id);
+      if (exists) {
+        return prev.map(i => i.userId === user.id ? { ...i, ...newInst, id: i.id } : i);
       }
-      return u;
-    }));
+      return [newInst, ...prev];
+    });
     setActiveRole('teacher');
     setActiveUserId(user.id);
+
+    const regAudit: RegistrationAudit = {
+      id: `reg-${Date.now()}`,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      role: 'teacher',
+      registeredAt: nowIso,
+      registrationType: 'teacher_application'
+    };
+    setRegistrations(prev => [regAudit, ...prev.filter(r => r.id !== regAudit.id)]);
+
+    // Guarantee persistence across both client SDK and server-side cloud DB
+    await Promise.allSettled([
+      saveUserToFirestore(updatedUser),
+      saveTeacherApplicationToFirestore(newApp),
+      saveInstructorToFirestore(newInst),
+      saveRegistrationAuditToFirestore(regAudit)
+    ]);
+
     return newApp;
   };
 
@@ -674,55 +1646,138 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const app = teacherApplications.find(a => a.id === applicationId);
     if (!app) return;
 
-    setTeacherApplications(prev => prev.map(a => {
-      if (a.id === applicationId) {
-        return {
-          ...a,
-          status: 'approved',
-          reviewedAt: new Date().toISOString(),
-          reviewedBy: currentUser?.name || 'Platform Admin',
-          reviewNotes: reviewNotes || 'Credentials, research background, and curriculum plan verified and approved by management.'
-        };
-      }
-      return a;
-    }));
+    const updatedApp: TeacherApplication = {
+      ...app,
+      status: 'approved',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: currentUser?.name || 'Platform Admin',
+      reviewNotes: reviewNotes || 'Credentials, research background, and curriculum plan verified and approved by management.'
+    };
 
-    setAllUsers(prev => prev.map(u => {
-      if (u.id === app.userId) {
-        return {
-          ...u,
-          teacherVerificationStatus: 'approved'
+    setTeacherApplications(prev => prev.map(a => a.id === applicationId ? updatedApp : a));
+    saveTeacherApplicationToFirestore(updatedApp);
+
+    setAllUsers(prev => {
+      const exists = prev.some(u => u.id === app.userId);
+      if (exists) {
+        return prev.map(u => {
+          if (u.id === app.userId) {
+            const updatedUser: User = {
+              ...u,
+              role: 'teacher',
+              teacherVerificationStatus: 'approved'
+            };
+            saveUserToFirestore(updatedUser);
+            return updatedUser;
+          }
+          return u;
+        });
+      } else {
+        const initials = app.applicantName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'TC';
+        const newUser: User = {
+          id: app.userId,
+          name: app.applicantName,
+          email: app.applicantEmail,
+          role: 'teacher',
+          avatarText: initials,
+          title: app.academicTitle,
+          institutionOrCompany: app.institutionOrCompany,
+          bio: app.bio,
+          enrolledCourseIds: [],
+          totalSpent: 0,
+          joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          status: 'active',
+          teacherVerificationStatus: 'approved',
+          teacherApplicationId: app.id,
+          updatedAt: new Date().toISOString()
         };
+        saveUserToFirestore(newUser);
+        return [newUser, ...prev];
       }
-      return u;
-    }));
+    });
+
+    // Synchronize or create instructor database record
+    setInstructors(prev => {
+      const existing = prev.find(i => i.userId === app.userId);
+      if (existing) {
+        const updated: Instructor = {
+          ...existing,
+          verificationStatus: 'approved',
+          academicTitle: app.academicTitle || existing.academicTitle,
+          institutionOrCompany: app.institutionOrCompany || existing.institutionOrCompany,
+          primaryDomain: app.primaryDomain || existing.primaryDomain,
+          bio: app.bio || existing.bio,
+          credentialsSummary: app.credentialsSummary || existing.credentialsSummary,
+          portfolioUrl: app.portfolioUrl || existing.portfolioUrl,
+          updatedAt: new Date().toISOString()
+        };
+        saveInstructorToFirestore(updated);
+        return prev.map(i => i.userId === app.userId ? updated : i);
+      } else {
+        const initials = app.applicantName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'FC';
+        const newInst: Instructor = {
+          id: `inst-${Date.now()}`,
+          userId: app.userId,
+          name: app.applicantName,
+          email: app.applicantEmail,
+          avatarText: initials,
+          academicTitle: app.academicTitle,
+          institutionOrCompany: app.institutionOrCompany,
+          primaryDomain: app.primaryDomain,
+          specialties: [app.primaryDomain, app.proposedCourseTopic],
+          bio: app.bio,
+          credentialsSummary: app.credentialsSummary,
+          portfolioUrl: app.portfolioUrl,
+          verificationStatus: 'approved',
+          rating: 5.0,
+          reviewCount: 0,
+          studentCount: 0,
+          courseIds: [],
+          officeHoursSchedule: 'Tuesdays & Thursdays, 16:00 - 18:00 UTC',
+          featured: false,
+          joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          updatedAt: new Date().toISOString()
+        };
+        saveInstructorToFirestore(newInst);
+        return [newInst, ...prev];
+      }
+    });
   };
 
   const rejectTeacherApplication = (applicationId: string, reviewNotes?: string) => {
     const app = teacherApplications.find(a => a.id === applicationId);
     if (!app) return;
 
-    setTeacherApplications(prev => prev.map(a => {
-      if (a.id === applicationId) {
-        return {
-          ...a,
-          status: 'rejected',
-          reviewedAt: new Date().toISOString(),
-          reviewedBy: currentUser?.name || 'Platform Admin',
-          reviewNotes: reviewNotes || 'Application declined by management based on institutional accreditation standards.'
-        };
-      }
-      return a;
-    }));
+    const updatedApp: TeacherApplication = {
+      ...app,
+      status: 'rejected',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: currentUser?.name || 'Platform Admin',
+      reviewNotes: reviewNotes || 'Application declined by management based on institutional accreditation standards.'
+    };
+
+    setTeacherApplications(prev => prev.map(a => a.id === applicationId ? updatedApp : a));
+    saveTeacherApplicationToFirestore(updatedApp);
 
     setAllUsers(prev => prev.map(u => {
       if (u.id === app.userId) {
-        return {
+        const updatedUser: User = {
           ...u,
           teacherVerificationStatus: 'rejected'
         };
+        saveUserToFirestore(updatedUser);
+        return updatedUser;
       }
       return u;
+    }));
+
+    setInstructors(prev => prev.map(i => {
+      if (i.userId === app.userId) {
+        const updated: Instructor = { ...i, verificationStatus: 'rejected', updatedAt: new Date().toISOString() };
+        saveInstructorToFirestore(updated);
+        return updated;
+      }
+      return i;
     }));
   };
 
@@ -731,28 +1786,67 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return courses.find(c => c.id === courseId);
   };
 
+  const isPendingTeacher = () => {
+    return currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus !== 'approved';
+  };
+
   const createCourse = (courseData: Omit<Course, 'id' | 'rating' | 'reviewCount' | 'studentCount' | 'updatedDate'>): Course => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot create courses until admin approval is granted.');
+      throw new Error('Access Restricted: Instructor account is pending administrative approval. Course creation is disabled.');
+    }
+    const authorUser = allUsers.find(u => u.id === courseData.instructorId) || currentUser;
     const newCourse: Course = {
       ...courseData,
       id: `course-${Date.now()}`,
+      instructorName: authorUser?.name || courseData.instructorName,
+      instructorTitle: authorUser?.title || courseData.instructorTitle,
+      instructorBio: authorUser?.bio || courseData.instructorBio,
       rating: 5.0,
       reviewCount: 0,
       studentCount: 0,
       updatedDate: 'Just now',
     };
     setCourses(prev => [newCourse, ...prev]);
+
+    // Sync into instructor's course list
+    setInstructors(prev => prev.map(inst => {
+      if (inst.userId === newCourse.instructorId || inst.id === newCourse.instructorId) {
+        const updated = {
+          ...inst,
+          courseIds: Array.from(new Set([...inst.courseIds, newCourse.id])),
+          updatedAt: new Date().toISOString()
+        };
+        saveInstructorToFirestore(updated);
+        return updated;
+      }
+      return inst;
+    }));
+
     return newCourse;
   };
 
   const updateCourse = (courseId: string, updates: Partial<Course>) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot update courses until admin approval is granted.');
+      return;
+    }
     setCourses(prev => prev.map(c => c.id === courseId ? { ...c, ...updates, updatedDate: 'Updated just now' } : c));
   };
 
   const deleteCourse = (courseId: string) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot delete courses until admin approval is granted.');
+      return;
+    }
     setCourses(prev => prev.filter(c => c.id !== courseId));
   };
 
   const toggleCoursePublish = (courseId: string) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot publish courses until admin approval is granted.');
+      return;
+    }
     setCourses(prev => prev.map(c => {
       if (c.id === courseId) {
         const nextStatus = c.status === 'published' ? 'draft' : 'published';
@@ -895,6 +1989,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     honors: 'Standard Mastery' | 'Passed with Honors' | 'Highest Distinction (Top 5%)' = 'Standard Mastery',
     targetUserId?: string
   ) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot issue certificates until admin approval is granted.');
+      return;
+    }
     const uid = targetUserId || currentUser?.id;
     if (!uid) return;
     const key = `${uid}_${courseId}`;
@@ -1110,6 +2208,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleEndorseReply = (threadId: string, replyId: string) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot endorse replies until admin approval is granted.');
+      return;
+    }
     setDiscussions(prev => prev.map(thread => {
       if (thread.id === threadId) {
         return {
@@ -1123,6 +2225,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Announcements
   const createAnnouncement = (courseId: string, title: string, content: string) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot broadcast announcements until admin approval is granted.');
+      return;
+    }
     const course = getCourseById(courseId);
     const teacherId = currentUser ? currentUser.id : 'faculty-admin';
     const teacherName = currentUser ? currentUser.name : 'Faculty Lead';
@@ -1171,6 +2277,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createMeetSession = async (
     sessionData: Omit<GoogleMeetSession, 'id' | 'createdAt' | 'attendeeCount'>
   ): Promise<GoogleMeetSession> => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot schedule Google Meet sessions until admin approval is granted.');
+      throw new Error('Access Restricted: Instructor account is pending administrative approval.');
+    }
     const id = `meet-${Date.now()}`;
     let finalMeetUrl = sessionData.meetUrl;
     let finalMeetCode = sessionData.meetCode;
@@ -1259,6 +2369,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setEducatorLectureFee = (fee: number, sessionType?: MeetSessionType) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot set lecture fees until admin approval is granted.');
+      return;
+    }
     const cleanFee = Math.max(0, Math.round(fee * 100) / 100);
     setEducatorBilling(prev => {
       if (sessionType) {
@@ -1284,6 +2398,20 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const requestPayout = (amount?: number): PayoutRecord => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot request payouts until admin approval is granted.');
+      const blockedRecord: PayoutRecord = {
+        id: `pay-blocked-${Date.now()}`,
+        amount: 0,
+        currency: educatorBilling.currency,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        method: 'Restricted (Pending Admin Approval)',
+        accountReference: 'Verification Required',
+        transactionCount: 0
+      };
+      return blockedRecord;
+    }
     const teacherCourses = courses;
     const grossRev = teacherCourses.reduce((sum, c) => sum + (c.studentCount * c.price), 0);
     const netRoyalty = grossRev * (educatorBilling.royaltyPercentage / 100);
@@ -1350,6 +2478,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // AI-DRIVEN VIDEO STUDIO & HOSTING METHODS
   // ==========================================
   const addHostedVideo = (video: HostedVideo) => {
+    if (isPendingTeacher()) {
+      console.warn('Action restricted: Pending teachers cannot upload videos until admin approval is granted.');
+      return;
+    }
     setHostedVideos(prev => [video, ...prev]);
     setStorageMetrics(prev => ({
       ...prev,
@@ -1683,10 +2815,12 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
     localStorage.removeItem(STORAGE_KEYS.AI_RECOMMENDATIONS);
     localStorage.removeItem(STORAGE_KEYS.HOSTED_VIDEOS);
     localStorage.removeItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS);
+    localStorage.removeItem(STORAGE_KEYS.INSTRUCTORS);
 
     setAllUsers(INITIAL_USERS);
     setActiveRole('guest');
     setActiveUserId(null);
+    setInstructors(INITIAL_INSTRUCTORS);
     setTeacherApplications(INITIAL_TEACHER_APPLICATIONS);
     setCourses(INITIAL_COURSES);
     setEnrollments(INITIAL_ENROLLMENTS);
@@ -1706,10 +2840,25 @@ Try out the hands-on exercise below, and I will see you in the next lecture!`,
       value={{
         currentUser,
         allUsers,
+        registrations,
         setUserRole,
         setCurrentUserById,
         signOut,
         updateUserStatus,
+        deleteUser,
+        deleteMultipleUsers,
+        deleteTeacherApplication,
+        addUserDirectly,
+        updateUserProfile,
+        saveUserProfileToFirestore: saveUserToFirestore,
+        enhanceUserProfileWithAI,
+        instructors,
+        getInstructorById,
+        getInstructorByUserId,
+        updateInstructorProfile,
+        matchInstructorsWithAI,
+        cloudSyncState,
+        forceCloudSync,
         teacherApplications,
         signUpStudent,
         signUpTeacher,

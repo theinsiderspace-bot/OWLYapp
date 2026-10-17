@@ -143,6 +143,11 @@ export const CourseEditorModal: React.FC<CourseEditorModalProps> = ({
   };
 
   const handleSaveCourse = () => {
+    if (currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus !== 'approved') {
+      setErrorMsg('Access Restricted: Your instructor account is currently pending administrative approval. Course creation and curriculum publishing are locked.');
+      return;
+    }
+
     if (!title.trim()) {
       setErrorMsg('Course title is required.');
       setActiveTab('info');

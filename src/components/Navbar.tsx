@@ -22,19 +22,30 @@ import {
   LogOut,
   Dna,
   Gamepad2,
-  Lock
+  Lock,
+  UserCheck,
+  Users,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience';
-  setActiveTab: (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => void;
+  activeTab: 'catalog' | 'instructors' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience';
+  setActiveTab: (tab: 'catalog' | 'instructors' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => void;
   onOpenCart?: () => void;
   onOpenAuthModal?: (mode: 'student_signup' | 'teacher_signup' | 'signin') => void;
+  onOpenProfileModal?: () => void;
   onLaunchGame?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenAuthModal, onLaunchGame }) => {
-  const { currentUser, signOut, enrollments, resetPlatformData } = useLms();
+export const Navbar: React.FC<NavbarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  onOpenAuthModal, 
+  onOpenProfileModal,
+  onLaunchGame 
+}) => {
+  const { currentUser, signOut, enrollments, resetPlatformData, cloudSyncState, forceCloudSync } = useLms();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -70,6 +81,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                   }`}
                 >
                   Browse Masterclasses
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('instructors')}
+                  className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
+                    activeTab === 'instructors'
+                      ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-slate-400" />
+                  <span>Faculty Directory</span>
                 </button>
 
                 <button
@@ -113,6 +136,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                   }`}
                 >
                   Browse Catalog
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('instructors')}
+                  className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
+                    activeTab === 'instructors'
+                      ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-indigo-500" />
+                  <span>Faculty Directory</span>
                 </button>
 
                 <button
@@ -177,6 +212,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                 </button>
 
                 <button
+                  onClick={() => setActiveTab('instructors')}
+                  className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
+                    activeTab === 'instructors'
+                      ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-sky-500" />
+                  <span>Faculty Directory</span>
+                </button>
+
+                <button
                   onClick={() => setActiveTab('learning')}
                   className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
                     activeTab === 'learning'
@@ -222,6 +269,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                 >
                   <ShieldCheck className="w-4 h-4 text-purple-600" />
                   <span>Admin Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('instructors')}
+                  className={`whitespace-nowrap shrink-0 transition-colors py-1 flex items-center gap-1.5 ${
+                    activeTab === 'instructors'
+                      ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span>Faculty Directory</span>
                 </button>
 
                 <button
@@ -305,6 +364,36 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
             <div className="flex items-center p-0.5 bg-slate-100/90 border border-slate-200/90 rounded-xl shadow-xs">
               <EcosystemLaunchers variant="navbar" />
             </div>
+
+            {/* Live Cloud & Database Sync Status Pill */}
+            <button
+              onClick={() => forceCloudSync()}
+              title={`Database Status: ${cloudSyncState.status === 'synced' ? 'Synced with Firestore' : cloudSyncState.status === 'syncing' ? 'Syncing...' : 'Local Cache / Offline'}. Click to force sync.`}
+              className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-all whitespace-nowrap ${
+                cloudSyncState.status === 'synced'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                  : cloudSyncState.status === 'syncing'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+              }`}
+            >
+              {cloudSyncState.status === 'synced' ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-semibold text-[11px]">Cloud Synced</span>
+                </>
+              ) : cloudSyncState.status === 'syncing' ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                  <span className="font-semibold text-[11px]">Syncing...</span>
+                </>
+              ) : (
+                <>
+                  <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="font-semibold text-[11px]">Sync Local</span>
+                </>
+              )}
+            </button>
 
             {/* Reset Sample State */}
             <button
@@ -544,6 +633,31 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
                             </button>
                           </>
                         )}
+                      </div>
+
+                      {/* User Profile & AI Dossier */}
+                      <div className="py-1 bg-indigo-50/40 border-y border-indigo-100/60">
+                        <button
+                          onClick={() => {
+                            setRoleDropdownOpen(false);
+                            onOpenProfileModal?.();
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-xs text-indigo-700 hover:bg-indigo-100/70 flex items-center gap-2.5 font-bold transition-colors"
+                        >
+                          <UserCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span>My Profile & AI Portfolio</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setRoleDropdownOpen(false);
+                            setActiveTab('instructors');
+                          }}
+                          className="w-full text-left px-3.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition-colors"
+                        >
+                          <Users className="w-4 h-4 text-slate-500 shrink-0" />
+                          <span>Faculty & Instructor Directory</span>
+                        </button>
                       </div>
 
                       {/* Account Actions */}
@@ -841,9 +955,36 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenA
               </>
             )}
 
+            {/* Mobile Profile & Directory Links */}
+            {currentUser && (
+              <div className="pt-2 border-t border-slate-100 space-y-1">
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenProfileModal?.();
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 text-indigo-700 bg-indigo-50 font-semibold"
+                >
+                  <UserCheck className="w-4 h-4 text-indigo-600" />
+                  <span>My Profile & AI Credentials</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setActiveTab('instructors');
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium"
+                >
+                  <Users className="w-4 h-4 text-slate-500" />
+                  <span>Faculty & Instructor Directory</span>
+                </button>
+              </div>
+            )}
+
             {/* Mobile Sign Out for Logged-In Users */}
             {currentUser && (
-              <div className="pt-2 border-t border-slate-100">
+              <div className="pt-1 border-t border-slate-100">
                 <button
                   onClick={() => {
                     signOut();

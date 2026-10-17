@@ -26,8 +26,7 @@ import {
   ArrowRight,
   GraduationCap,
   AlertCircle,
-  ArrowLeft,
-  UserCheck
+  ArrowLeft
 } from 'lucide-react';
 
 interface BioscienceResearchHubProps {
@@ -100,7 +99,7 @@ export const BioscienceResearchHub: React.FC<BioscienceResearchHubProps> = ({
   onOpenAuth, 
   onBackToCatalog 
 }) => {
-  const { currentUser, allUsers, setCurrentUserById } = useLms();
+  const { currentUser } = useLms();
   const isAuthorized = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
 
   const [activeTab, setActiveTab] = useState<'3d-viewer' | 'search-scout' | 'maps-locator' | 'voice-notes'>('3d-viewer');
@@ -499,45 +498,41 @@ export const BioscienceResearchHub: React.FC<BioscienceResearchHubProps> = ({
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
                     {onOpenAuth && (
-                      <button
-                        onClick={() => onOpenAuth('teacher_signup')}
-                        className="px-4 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
-                      >
-                        <GraduationCap className="w-4 h-4 fill-current" />
-                        <span>Apply for Faculty Accreditation</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => onOpenAuth('teacher_signup')}
+                          className="px-4 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+                        >
+                          <GraduationCap className="w-4 h-4 fill-current" />
+                          <span>Apply for Faculty Accreditation</span>
+                        </button>
+
+                        <button
+                          onClick={() => onOpenAuth('signin')}
+                          className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl transition-colors flex items-center gap-2"
+                        >
+                          <LogIn className="w-4 h-4 text-teal-400" />
+                          <span>Sign In with Educator / Admin Account</span>
+                        </button>
+                      </>
                     )}
 
-                    {/* Quick switch to verified educator account */}
-                    <button
-                      onClick={() => {
-                        const educator = allUsers.find(u => u.role === 'teacher' && u.teacherVerificationStatus === 'approved') || allUsers.find(u => u.role === 'teacher');
-                        if (educator) setCurrentUserById(educator.id);
-                      }}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl transition-colors flex items-center gap-2"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      <span>Switch to Faculty Profile</span>
-                    </button>
-
-                    {/* Quick switch to Super Admin */}
-                    <button
-                      onClick={() => {
-                        const admin = allUsers.find(u => u.role === 'admin' && u.email === 'theinsiderspace@gmail.com') || allUsers.find(u => u.role === 'admin');
-                        if (admin) setCurrentUserById(admin.id);
-                      }}
-                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl transition-colors flex items-center gap-2"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-purple-400" />
-                      <span>Switch to Super Admin</span>
-                    </button>
+                    {onBackToCatalog && (
+                      <button
+                        onClick={onBackToCatalog}
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs rounded-xl transition-colors flex items-center gap-2"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Return to Course Catalog</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
                 /* Unauthenticated guest */
                 <div className="space-y-4">
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Please log in with your educator credentials or administrator passkey to access this high-performance laboratory.
+                    Please log in with your verified educator credentials or platform administrator passkey to access the Bioscience Discovery Lab.
                   </p>
 
                   <div className="flex flex-wrap items-center gap-3">
@@ -561,30 +556,15 @@ export const BioscienceResearchHub: React.FC<BioscienceResearchHubProps> = ({
                       </>
                     )}
 
-                    {/* Instant Demo Logins */}
-                    <div className="w-full pt-2 flex flex-wrap items-center gap-2 border-t border-slate-700/60">
-                      <span className="text-[11px] font-mono text-slate-400 mr-1">Instant Demo Logins:</span>
+                    {onBackToCatalog && (
                       <button
-                        onClick={() => {
-                          const educator = allUsers.find(u => u.role === 'teacher');
-                          if (educator) setCurrentUserById(educator.id);
-                        }}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-teal-500/40 text-teal-300 rounded-lg text-xs font-mono transition-colors flex items-center gap-1.5"
+                        onClick={onBackToCatalog}
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs rounded-xl transition-colors flex items-center gap-2"
                       >
-                        <UserCheck className="w-3.5 h-3.5 text-teal-400" />
-                        <span>Faculty (Prof. Julian Thorne)</span>
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Return to Course Catalog</span>
                       </button>
-                      <button
-                        onClick={() => {
-                          const admin = allUsers.find(u => u.role === 'admin' && u.email === 'theinsiderspace@gmail.com') || allUsers.find(u => u.role === 'admin');
-                          if (admin) setCurrentUserById(admin.id);
-                        }}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-purple-500/40 text-purple-300 rounded-lg text-xs font-mono transition-colors flex items-center gap-1.5"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Super Admin (theinsiderspace)</span>
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -15,7 +15,11 @@ import {
   Building2, 
   FileText, 
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Key
 } from 'lucide-react';
 
 export type AuthModalMode = 'student_signup' | 'teacher_signup' | 'signin';
@@ -64,6 +68,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [credentialsSummary, setCredentialsSummary] = useState('');
   const [proposedCourseTopic, setProposedCourseTopic] = useState('');
+  const [teacherPassword, setTeacherPassword] = useState('');
+  const [showTeacherPassword, setShowTeacherPassword] = useState(false);
+  const [teacherFormError, setTeacherFormError] = useState('');
   const [pledgeAccepted, setPledgeAccepted] = useState(false);
 
   // Sign in state
@@ -77,72 +84,99 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     description: string;
     badge?: string;
   } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleStudentSubmit = (e: React.FormEvent) => {
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentName.trim() || !studentEmail.trim()) return;
+    if (!studentName.trim() || !studentEmail.trim() || isSubmitting) return;
 
-    signUpStudent({
-      name: studentName,
-      email: studentEmail,
-      title: studentTitle,
-      bio: studentBio
-    });
+    setIsSubmitting(true);
+    try {
+      await signUpStudent({
+        name: studentName,
+        email: studentEmail,
+        title: studentTitle,
+        bio: studentBio,
+        password: studentPassword
+      });
 
-    setSuccessNotice({
-      title: 'Student Account Activated!',
-      description: `Welcome aboard, ${studentName}! Your learning account is ready. You can now browse masterclasses, complete interactive modules, and claim verified certificates.`,
-      badge: 'Active Student'
-    });
+      setSuccessNotice({
+        title: 'Student Account Activated!',
+        description: `Welcome aboard, ${studentName}! Your learning account is ready. You can now browse masterclasses, complete interactive modules, and claim verified certificates.`,
+        badge: 'Active Student'
+      });
 
-    setTimeout(() => {
-      onSuccess?.('student');
-      onClose();
-    }, 1800);
+      setTimeout(() => {
+        onSuccess?.('student');
+        onClose();
+      }, 1600);
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleTeacherSubmit = (e: React.FormEvent) => {
+  const handleTeacherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherName.trim() || !teacherEmail.trim() || !academicTitle.trim() || !institution.trim() || !pledgeAccepted) {
+    setTeacherFormError('');
+
+    if (!teacherName.trim() || !teacherEmail.trim() || !academicTitle.trim() || !institution.trim() || !pledgeAccepted || isSubmitting) {
       return;
     }
 
-    if (currentUser && currentUser.role === 'student') {
-      applyAsTeacher({
-        academicTitle,
-        institutionOrCompany: institution,
-        primaryDomain,
-        bio: teacherBio || `Faculty member at ${institution} specializing in ${primaryDomain}.`,
-        portfolioUrl,
-        credentialsSummary: credentialsSummary || 'Verified academic and engineering background.',
-        proposedCourseTopic: proposedCourseTopic || 'Production Systems Architecture'
-      });
-    } else {
-      signUpTeacher({
-        name: teacherName,
-        email: teacherEmail,
-        academicTitle,
-        institutionOrCompany: institution,
-        primaryDomain,
-        bio: teacherBio || `Faculty member at ${institution} specializing in ${primaryDomain}.`,
-        portfolioUrl,
-        credentialsSummary: credentialsSummary || 'Verified academic and engineering background.',
-        proposedCourseTopic: proposedCourseTopic || 'Production Systems Architecture'
-      });
+    if (!teacherPassword || teacherPassword.trim().length < 6) {
+      setTeacherFormError('Account security required: Please enter an educator password with at least 6 characters.');
+      return;
     }
 
-    setSuccessNotice({
-      title: 'Application Submitted to Management!',
-      description: `Thank you, ${teacherName}. Your accreditation credentials have been received. Platform Management (Admin) will thoroughly review your curriculum and credentials. You can access Teacher Studio now to prepare draft materials.`,
-      badge: 'Pending Management Approval'
-    });
+    setIsSubmitting(true);
+    try {
+      const cleanPass = teacherPassword.trim();
+      if (currentUser && currentUser.role === 'student') {
+        await applyAsTeacher({
+          academicTitle,
+          institutionOrCompany: institution,
+          primaryDomain,
+          bio: teacherBio || `Faculty member at ${institution} specializing in ${primaryDomain}.`,
+          portfolioUrl,
+          credentialsSummary: credentialsSummary || 'Verified academic and engineering background.',
+          proposedCourseTopic: proposedCourseTopic || 'Production Systems Architecture',
+          password: cleanPass
+        });
+      } else {
+        await signUpTeacher({
+          name: teacherName,
+          email: teacherEmail,
+          password: cleanPass,
+          academicTitle,
+          institutionOrCompany: institution,
+          primaryDomain,
+          bio: teacherBio || `Faculty member at ${institution} specializing in ${primaryDomain}.`,
+          portfolioUrl,
+          credentialsSummary: credentialsSummary || 'Verified academic and engineering background.',
+          proposedCourseTopic: proposedCourseTopic || 'Production Systems Architecture'
+        });
+      }
 
-    setTimeout(() => {
-      onSuccess?.('teacher');
-      onClose();
-    }, 2200);
+      setSuccessNotice({
+        title: 'Instructor Application Submitted for Review',
+        description: `Thank you, ${teacherName}. Your educator dossier and account password have been securely stored in the Firestore database. In accordance with platform governance, all instructor studio functionalities remain strictly restricted and locked until platform management formally evaluates and grants administrative approval. You may sign in with your email and password to check your live verification status anytime.`,
+        badge: 'Pending Admin Approval · All Features Restricted'
+      });
+
+      setTimeout(() => {
+        onSuccess?.('teacher');
+        onClose();
+      }, 2400);
+    } catch (err: any) {
+      console.error('Teacher registration error:', err);
+      setTeacherFormError('Application submission error. Please try again or check your connection.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignIn = (e: React.FormEvent) => {
@@ -360,10 +394,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="pt-2">
                     <button
                       type="submit"
-                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                     >
-                      <GraduationCap className="w-4 h-4" />
-                      <span>Complete Student Registration</span>
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Activating Account & Syncing Database...</span>
+                        </>
+                      ) : (
+                        <>
+                          <GraduationCap className="w-4 h-4" />
+                          <span>Complete Student Registration</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -416,6 +460,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                       />
                     </div>
+                  </div>
+
+                  {/* Instructor Account Password */}
+                  <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Instructor Account Password</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-mono">Min. 6 characters</span>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type={showTeacherPassword ? 'text' : 'password'}
+                        required
+                        value={teacherPassword}
+                        onChange={(e) => {
+                          setTeacherPassword(e.target.value);
+                          if (teacherFormError) setTeacherFormError('');
+                        }}
+                        placeholder="Create a secure password for your educator profile"
+                        className="w-full pl-3 pr-10 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTeacherPassword(!showTeacherPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                        title={showTeacherPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showTeacherPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Secures your educator profile in Cloud Firestore. Use this password with your email to log in and review your verification and accreditation status.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -521,14 +603,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </label>
                   </div>
 
+                  {teacherFormError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start gap-2 animate-in fade-in">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{teacherFormError}</span>
+                    </div>
+                  )}
+
                   <div className="pt-2">
                     <button
                       type="submit"
-                      disabled={!pledgeAccepted}
+                      disabled={!pledgeAccepted || isSubmitting}
                       className="w-full py-2.5 bg-slate-900 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm"
                     >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Submit Application for Management Approval</span>
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Transmitting Application to Management...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Submit Application for Management Approval</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>

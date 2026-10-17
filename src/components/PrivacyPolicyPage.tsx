@@ -195,11 +195,11 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                   Have questions about GDPR or FERPA rights? Contact our legal team directly:
                 </p>
                 <a
-                  href="mailto:privacy@owly.ai.studio"
+                  href="mailto:info@owly.space"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>privacy@owly.ai.studio</span>
+                  <span>info@owly.space</span>
                 </a>
               </div>
             </div>
@@ -394,7 +394,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ onBack }) 
                 <p className="text-xs text-slate-300">
                   OWLY Learning Technologies Inc.<br />
                   Data Protection & Compliance Office<br />
-                  Direct Inquiries: <a href="mailto:privacy@owly.ai.studio" className="text-indigo-400 hover:underline">privacy@owly.ai.studio</a>
+                  Direct Inquiries: <a href="mailto:info@owly.space" className="text-indigo-400 hover:underline">info@owly.space</a>
                 </p>
               </div>
             </section>

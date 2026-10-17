@@ -16,6 +16,8 @@ import { EmbeddedEcosystemViewer } from './components/EmbeddedEcosystemViewer';
 import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { BioscienceResearchHub } from './components/BioscienceResearchHub';
 import { MolecularDefenseGame } from './components/game/MolecularDefenseGame';
+import { InstructorDatabase } from './components/InstructorDatabase';
+import { UserProfileModal } from './components/UserProfileModal';
 import { 
   ShieldCheck, 
   GraduationCap, 
@@ -26,10 +28,11 @@ import {
 } from 'lucide-react';
 
 function LMSAppContent() {
-  const { currentUser, isUserEnrolled, embeddedEcosystem, setEmbeddedEcosystem } = useLms();
+  const { currentUser, isUserEnrolled, embeddedEcosystem, setEmbeddedEcosystem, getCourseById } = useLms();
 
-  const [activeTab, setActiveTab] = useState<'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'instructors' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience'>('catalog');
   const [is3DGameOpen, setIs3DGameOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [selectedCourseForDetails, setSelectedCourseForDetails] = useState<Course | null>(null);
   const [selectedCourseForCheckout, setSelectedCourseForCheckout] = useState<Course | null>(null);
   const [activeLearningCourse, setActiveLearningCourse] = useState<Course | null>(null);
@@ -86,7 +89,7 @@ function LMSAppContent() {
     );
   }
 
-  const handleTabChange = (tab: 'catalog' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => {
+  const handleTabChange = (tab: 'catalog' | 'instructors' | 'learning' | 'teacher' | 'admin' | 'privacy' | 'bioscience') => {
     setEmbeddedEcosystem(null);
     setActiveTab(tab);
   };
@@ -98,6 +101,7 @@ function LMSAppContent() {
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
         onOpenAuthModal={handleOpenAuth}
+        onOpenProfileModal={() => setProfileModalOpen(true)}
         onLaunchGame={() => setIs3DGameOpen(true)}
       />
 
@@ -117,6 +121,14 @@ function LMSAppContent() {
                 onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
                 onOpenStudentSignup={() => handleOpenAuth('student_signup')}
                 onOpenSignIn={() => handleOpenAuth('signin')}
+              />
+            )}
+
+            {activeTab === 'instructors' && (
+              <InstructorDatabase
+                onSelectCourse={handleSelectCourse}
+                onOpenTeacherApplication={() => handleOpenAuth('teacher_signup')}
+                onOpenMeetScheduler={() => setActiveTab('teacher')}
               />
             )}
 
@@ -154,6 +166,16 @@ function LMSAppContent() {
           </>
         )}
       </main>
+
+      {/* User Profile & AI Portfolio Modal */}
+      <UserProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        onNavigateToCourse={(cId) => {
+          const found = getCourseById(cId);
+          if (found) handleSelectCourse(found);
+        }}
+      />
 
       {/* Course Details Syllabus Modal */}
       {selectedCourseForDetails && (

@@ -36,16 +36,24 @@ import {
   UserCheck,
   Video,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 
 interface TeacherStudioProps {
   onSelectCourse: (course: Course) => void;
   onOpenTeacherApplication?: () => void;
   onOpenSignIn?: () => void;
+  onBrowseCatalog?: () => void;
 }
 
-export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, onOpenTeacherApplication, onOpenSignIn }) => {
+export const TeacherStudio: React.FC<TeacherStudioProps> = ({ 
+  onSelectCourse, 
+  onOpenTeacherApplication, 
+  onOpenSignIn,
+  onBrowseCatalog 
+}) => {
   const { 
     currentUser, 
     allUsers,
@@ -61,10 +69,13 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
     issueCertificate,
     revokeCertificate,
     teacherApplications,
+    approveTeacherApplication,
     googleMeetSessions,
     hostedVideos,
     transactions,
-    educatorBilling
+    educatorBilling,
+    cloudSyncState,
+    forceCloudSync
   } = useLms();
 
   const [activeTab, setActiveTab] = useState<'courses' | 'analytics' | 'video-studio' | 'meet' | 'lecture-fees' | 'discussions' | 'announcements' | 'certificates'>('courses');
@@ -72,10 +83,13 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
   const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [publishAlert, setPublishAlert] = useState<string | null>(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [approvalToast, setApprovalToast] = useState<string | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
-  // Status checks
-  const isTeacherApproved = currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus === 'approved';
-  const isTeacherPending = currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus === 'pending_approval';
+  // Status checks: Approved requires explicit verificationStatus === 'approved' (or platform admin)
+  const isTeacherApproved = (currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus === 'approved') || currentUser?.role === 'admin';
+  const isTeacherPending = currentUser?.role === 'teacher' && (currentUser.teacherVerificationStatus === 'pending_approval' || currentUser.teacherVerificationStatus === 'unverified' || !currentUser.teacherVerificationStatus);
   const isTeacherRejected = currentUser?.role === 'teacher' && currentUser.teacherVerificationStatus === 'rejected';
   const isStudentVisiting = currentUser?.role === 'student';
 
@@ -258,127 +272,18 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
         </div>
       )}
 
-      {/* Case 2: Teacher Application Pending Approval by Management */}
-      {isTeacherPending && (
-        <div className="bg-white border-2 border-amber-300 rounded-2xl p-6 md:p-8 shadow-sm space-y-5">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                <Clock className="w-6 h-6 text-amber-700" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    Instructor Application Under Review by Management
-                  </h3>
-                  <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                    Pending Management Approval
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
-                  Your credentials and curriculum outline are currently undergoing formal review. In accordance with platform governance, <strong>instructor verification and marketplace publishing rights are authorized solely by platform management</strong>.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowAppDetails(!showAppDetails)}
-              className="px-3.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap self-start"
-            >
-              {showAppDetails ? 'Hide Application Details' : 'View Submitted Credentials'}
-            </button>
-          </div>
-
-          {/* Verification Pipeline Tracker */}
-          <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-4">
-            <span className="text-[11px] font-semibold text-amber-900 uppercase tracking-wider block mb-3">
-              Management Accreditation Pipeline
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="bg-white p-3 rounded-lg border border-amber-200/70 text-xs flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[11px]">
-                  ✓
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-900">1. Application Submitted</div>
-                  <div className="text-[10px] text-slate-500 font-mono">Profile & syllabus received</div>
-                </div>
-              </div>
-
-              <div className="bg-amber-100/70 p-3 rounded-lg border border-amber-300 text-xs flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[11px] animate-pulse">
-                  2
-                </div>
-                <div>
-                  <div className="font-semibold text-amber-900">2. Management Review</div>
-                  <div className="text-[10px] text-amber-700 font-mono">In evaluation by platform Dean</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs flex items-center gap-2.5 opacity-60">
-                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-[11px]">
-                  3
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-700">3. Marketplace Activation</div>
-                  <div className="text-[10px] text-slate-500 font-mono">Course publishing & certificates</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Expandable Application Details */}
-          {showAppDetails && myApplication && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2 animate-in fade-in">
-              <div className="flex justify-between items-center text-[11px] font-mono text-slate-500">
-                <span>Application Reference: {myApplication.id}</span>
-                <span>Submitted: {new Date(myApplication.submittedAt).toLocaleDateString()}</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                <div>
-                  <span className="font-semibold text-slate-700">Institution / Affiliation:</span>{' '}
-                  <span className="text-slate-600">{myApplication.institutionOrCompany}</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-slate-700">Primary Domain:</span>{' '}
-                  <span className="text-slate-600">{myApplication.primaryDomain}</span>
-                </div>
-                <div className="md:col-span-2">
-                  <span className="font-semibold text-slate-700">Credentials Summary:</span>{' '}
-                  <span className="text-slate-600">{myApplication.credentialsSummary}</span>
-                </div>
-                {myApplication.proposedCourseTopic && (
-                  <div className="md:col-span-2">
-                    <span className="font-semibold text-slate-700">Proposed Course:</span>{' '}
-                    <span className="text-slate-600 font-mono">{myApplication.proposedCourseTopic}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 text-xs text-amber-800">
-            <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-            <span>
-              You may upload video lessons and draft modules below. <strong>Publishing to the public catalog is locked</strong> until management completes verification.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Case 3: Teacher Application Declined */}
+      {/* Case 2: Teacher Application Declined */}
       {isTeacherRejected && (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h3 className="text-base font-bold text-rose-900">
-                Instructor Application Declined by Management
+                Instructor Accreditation Declined by Management
               </h3>
               <p className="text-xs text-rose-800 leading-relaxed">
-                Management reviewed your instructor submission. Feedback:{' '}
-                <span className="font-semibold">{myApplication?.reviewNotes || 'Verification could not be confirmed.'}</span>
+                Management reviewed your instructor submission. Review feedback:{' '}
+                <span className="font-semibold">{myApplication?.reviewNotes || 'Verification criteria could not be confirmed.'}</span>
               </p>
               <div className="pt-2">
                 <button
@@ -393,61 +298,388 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
         </div>
       )}
 
-      {/* Studio Banner & Instructor Info */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-            {currentUser.avatarText}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className="font-mono text-xs uppercase tracking-wider text-indigo-700 font-semibold">
-                Instructor Studio
+      {/* Case 3: Teacher Account Pending Management Approval - ALL FUNCTIONALITIES STRICTLY RESTRICTED */}
+      {currentUser.role === 'teacher' && !isTeacherApproved && !isTeacherRejected && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Main Locked Status Hero Card */}
+          <div className="bg-white border-2 border-amber-300/90 rounded-2xl p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 ring-4 ring-amber-50">
+                  <Lock className="w-7 h-7 text-amber-700" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-900">
+                      All Teacher Functionalities Locked
+                    </h2>
+                    <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 animate-spin" />
+                      Pending Administrative Approval
+                    </span>
+                  </div>
+                  <p className="text-xs md:text-sm text-slate-600 max-w-3xl leading-relaxed">
+                    Your instructor accreditation application is currently queued for administrative verification by <strong>Platform Management (Platform Dean)</strong>. In accordance with university academic standards and platform governance, <strong>all educator privileges—including course creation, marketplace publishing, video lesson studio, Google Meet office hours, fee management, and certificate issuance—remain strictly restricted</strong> until an administrator formally approves your application.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 self-start">
+                <button
+                  onClick={async () => {
+                    setIsRefreshingStatus(true);
+                    try {
+                      await forceCloudSync();
+                      setStatusFeedback('Refreshed from Cloud Firestore. Status: Pending Management Review.');
+                      setTimeout(() => setStatusFeedback(null), 4000);
+                    } finally {
+                      setIsRefreshingStatus(false);
+                    }
+                  }}
+                  disabled={isRefreshingStatus}
+                  className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isRefreshingStatus ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingStatus ? 'Checking...' : 'Check Live Status'}</span>
+                </button>
+
+                {onBrowseCatalog && (
+                  <button
+                    onClick={onBrowseCatalog}
+                    className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-colors flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Browse Catalog as Learner</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {statusFeedback && (
+              <div className="bg-sky-50 border border-sky-200 text-sky-800 rounded-xl p-3 text-xs flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>{statusFeedback}</span>
+              </div>
+            )}
+
+            {/* Verification Pipeline Tracker */}
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 md:p-5">
+              <span className="text-[11px] font-semibold text-amber-900 uppercase tracking-wider block mb-3">
+                Management Accreditation Pipeline
               </span>
-              <span className="text-slate-300">·</span>
-              <span className="text-xs text-slate-500">{currentUser.title}</span>
 
-              {isTeacherApproved && (
-                <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3 text-emerald-600" />
-                  <span>Verified Faculty · Approved by Management</span>
-                </span>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white p-3.5 rounded-xl border border-amber-200/70 text-xs flex items-center gap-3 shadow-2xs">
+                  <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    ✓
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900">1. Application Submitted</div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">Dossier & syllabus queued in database</div>
+                  </div>
+                </div>
 
-              {isTeacherPending && (
-                <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-amber-600" />
-                  <span>Pending Management Approval</span>
-                </span>
+                <div className="bg-amber-100/80 p-3.5 rounded-xl border border-amber-300 text-xs flex items-center gap-3 shadow-2xs">
+                  <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 animate-pulse">
+                    2
+                  </div>
+                  <div>
+                    <div className="font-bold text-amber-950">2. Administrative Review</div>
+                    <div className="text-[10px] text-amber-800 font-mono mt-0.5">Evaluation by Platform Dean</div>
+                  </div>
+                </div>
+
+                <div className="bg-white/80 p-3.5 rounded-xl border border-slate-200 text-xs flex items-center gap-3 opacity-60">
+                  <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-xs shrink-0">
+                    <Lock className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-700">3. Faculty Activation</div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">Full studio & marketplace unlock</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Expandable Application Dossier */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
+              <div 
+                onClick={() => setShowAppDetails(!showAppDetails)}
+                className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-100/70 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-slate-500" />
+                  <span className="font-bold text-xs text-slate-800">
+                    Submitted Faculty Dossier Details
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    ({myApplication?.id || currentUser.teacherApplicationId || 'Registered'})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                >
+                  {showAppDetails ? 'Collapse Details' : 'View Full Dossier'}
+                </button>
+              </div>
+
+              {showAppDetails && (
+                <div className="p-4 pt-1 border-t border-slate-200 text-xs space-y-3 bg-white animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">APPLICANT</span>
+                      <span className="text-slate-800 font-medium">{currentUser.name} ({currentUser.email})</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">ACADEMIC TITLE</span>
+                      <span className="text-slate-800 font-medium">{currentUser.title || myApplication?.academicTitle || 'Faculty Candidate'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">INSTITUTION / COMPANY</span>
+                      <span className="text-slate-800 font-medium">{currentUser.institutionOrCompany || myApplication?.institutionOrCompany || 'Independent Researcher'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">PRIMARY DOMAIN</span>
+                      <span className="text-slate-800 font-medium">{myApplication?.primaryDomain || 'Computer Science & AI'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">SUBMISSION DATE</span>
+                      <span className="text-slate-800 font-mono">{myApplication ? new Date(myApplication.submittedAt).toLocaleDateString() : currentUser.joinedDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">CURRENT STATUS</span>
+                      <span className="text-amber-700 font-bold font-mono">Pending Admin Approval</span>
+                    </div>
+                  </div>
+
+                  {myApplication?.proposedCourseTopic && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <span className="text-slate-400 text-[10px] block font-semibold">PROPOSED MASTERCLASS</span>
+                      <span className="text-slate-800 font-medium">{myApplication.proposedCourseTopic}</span>
+                    </div>
+                  )}
+
+                  {myApplication?.credentialsSummary && (
+                    <div>
+                      <span className="text-slate-400 text-[10px] block font-semibold">CREDENTIALS DOSSIER</span>
+                      <p className="text-slate-600 leading-relaxed text-xs">{myApplication.credentialsSummary}</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-              Welcome back, {currentUser.name}
-            </h2>
-            <p className="text-xs text-slate-600 max-w-2xl mt-1 leading-relaxed">
-              Manage your course curriculum, upload new video lectures, broadcast updates, and interact directly with enrolled learners.
-            </p>
+
+            {/* Applicant Review Status Banner */}
+            <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold text-xs text-amber-950 flex items-center gap-2">
+                  <span>Administrative Accreditation Review in Progress</span>
+                  <span className="px-2 py-0.5 text-[10px] font-mono bg-amber-200/80 text-amber-900 rounded font-semibold">
+                    Password-Protected Account
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                  Your instructor credentials and account password have been securely recorded in the Cloud Firestore database. In compliance with platform governance, all educator tools—including course syllabus drafting, video lectures, Google Meet classrooms, lecture fee management, and certificate issuance—remain completely locked until a Platform Administrator evaluates your dossier and grants official approval in the <strong>Admin Dashboard &gt; Teacher Approvals</strong> portal.
+                </p>
+              </div>
+            </div>
+
+            {approvalToast && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-3 text-xs flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">{approvalToast}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Matrix of Restricted Educator Capabilities */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span>Restricted Capabilities (Locked Until Management Grants Approval)</span>
+              </h3>
+              <span className="text-[11px] font-mono text-slate-500">
+                8 Systems Protected
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Course Creation Studio</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Drafting new syllabus modules, lesson creation, and course uploads are disabled until accredited.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <ExternalLink className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Catalog Marketplace Publishing</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Publishing masterclasses to the public catalog and enrolling paying learners is locked.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <Video className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">AI Video Studio & Storage</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Lecture screen recording, AI video transcoding, and cloud media uploads are restricted.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <Video className="w-4 h-4 text-rose-500" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Google Meet Classrooms</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Hosting live office hours and generating verified Google Meet conference links is restricted.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Lecture Fees & Payouts</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Custom lecture fee pricing, 70% net revenue split, and balance payout withdrawals are disabled.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Student Q&A & Forum Replies</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Replying to student questions as verified faculty or endorsing student answers is locked.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Cryptographic Certificates</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Generating verified SHA-256 completion credentials for students is strictly locked.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 opacity-80 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                </div>
+                <div className="font-bold text-xs text-slate-900">Public Faculty Directory</div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Your profile is hidden from learner search and 1-on-1 office hour bookings until accredited.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('video-studio')}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
-          >
-            <Video className="w-4 h-4" />
-            <span>AI Video Studio & Recording</span>
-          </button>
+      {/* OPERATIONAL TEACHER STUDIO (ONLY UNLOCKED ONCE FORMALLY APPROVED BY ADMIN) */}
+      {isTeacherApproved && (
+        <>
+          {/* Studio Banner & Instructor Info */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                {currentUser.avatarText}
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="font-mono text-xs uppercase tracking-wider text-indigo-700 font-semibold">
+                    Instructor Studio
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-xs text-slate-500">{currentUser.title}</span>
 
-          <button
-            onClick={() => setIsCreatingCourse(true)}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Upload New Course</span>
-          </button>
-        </div>
-      </div>
+                  <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-emerald-600" />
+                    <span>Verified Faculty · Approved by Management</span>
+                  </span>
+                </div>
+                <h2 className="text-xl md:text-2xl font-bold text-slate-900">
+                  Welcome back, {currentUser.name}
+                </h2>
+                <p className="text-xs text-slate-600 max-w-2xl mt-1 leading-relaxed">
+                  Manage your course curriculum, upload new video lectures, broadcast updates, and interact directly with enrolled learners.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('video-studio')}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
+              >
+                <Video className="w-4 h-4" />
+                <span>AI Video Studio & Recording</span>
+              </button>
+
+              <button
+                onClick={() => setIsCreatingCourse(true)}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Upload New Course</span>
+              </button>
+            </div>
+          </div>
 
       {/* KPI Metric Strips (Tabular figures, single elevation) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1261,6 +1493,8 @@ export const TeacherStudio: React.FC<TeacherStudioProps> = ({ onSelectCourse, on
             setEditingCourse(null);
           }}
         />
+      )}
+        </>
       )}
     </div>
   );

@@ -4,6 +4,16 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { initializeApp as initServerFirebase, getApps as getServerApps, getApp as getServerApp } from 'firebase/app';
+import { 
+  getFirestore as getServerFirestore, 
+  collection as serverCol, 
+  doc as serverDoc, 
+  getDocs as serverGetDocs, 
+  setDoc as serverSetDoc, 
+  deleteDoc as serverDeleteDoc 
+} from 'firebase/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,6 +25,36 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Initialize server-side Firestore instance with direct Google Cloud network connectivity
+let serverDb: any = null;
+try {
+  const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(cfgPath)) {
+    const rawCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    const sApp = getServerApps().length > 0 ? getServerApp() : initServerFirebase(rawCfg);
+    serverDb = getServerFirestore(sApp, rawCfg.firestoreDatabaseId);
+    console.log('[Server DB] Firestore connected directly to database:', rawCfg.firestoreDatabaseId);
+  }
+} catch (sErr) {
+  console.warn('[Server DB] Server-side Firestore initialization notice:', sErr);
+}
+
+function sanitizeServerPayload(val: any): any {
+  if (val === undefined) return null;
+  if (val === null || typeof val !== 'object') return val;
+  if (Array.isArray(val)) {
+    return val.filter(item => item !== undefined).map(item => sanitizeServerPayload(item));
+  }
+  const clean: Record<string, any> = {};
+  for (const key of Object.keys(val)) {
+    const v = val[key];
+    if (v !== undefined) {
+      clean[key] = sanitizeServerPayload(v);
+    }
+  }
+  return clean;
+}
 
 // Initialize Gemini SDK with modern @google/genai
 let aiClient: GoogleGenAI | null = null;
@@ -724,6 +764,320 @@ app.get('/api/science/compound/:name', async (req: Request, res: Response) => {
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// 12. AI-Driven User Profile Intelligence & Skill Enhancer
+app.post('/api/profile-ai/enhance', async (req: Request, res: Response) => {
+  try {
+    const { name, role, title, bio, currentSkills, learningGoals } = req.body;
+
+    if (aiClient && process.env.GEMINI_API_KEY) {
+      const prompt = `You are an elite academic career advisor and executive engineering mentor.
+Analyze the following user profile at Aetheria LMS / OWLY Academy:
+Name: ${name || 'Learner'}
+Role: ${role || 'student'}
+Current Title: ${title || 'Software Practitioner'}
+Current Bio: ${bio || 'Passionate engineer exploring cutting-edge systems.'}
+Current Skills: ${Array.isArray(currentSkills) ? currentSkills.join(', ') : 'Distributed systems, Cloud'}
+Learning Goals: ${Array.isArray(learningGoals) ? learningGoals.join(', ') : 'Master high-throughput systems and AI architectures'}
+
+Provide an AI-driven profile enhancement. Return ONLY valid JSON in this exact structure:
+{
+  "polishedBio": "string (A compelling 2-3 sentence academic/engineering bio emphasizing domain depth and clear trajectory)",
+  "extractedSkills": ["string (4-8 concise skill tags extracted/refined from current experience)"],
+  "recommendedSkills": ["string (4-6 high-value frontier skills to acquire next)"],
+  "careerTrajectory": "string (1-2 sentence executive assessment of potential roles or specialization)",
+  "recommendedCourseTopics": ["string (3 top curriculum topics they should study next)"]
+}`;
+
+      try {
+        const aiResponse = await aiClient.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.3
+          }
+        });
+
+        const text = aiResponse.text?.trim() || '{}';
+        const parsed = JSON.parse(text);
+        if (parsed.polishedBio) {
+          return res.json(parsed);
+        }
+      } catch (genError) {
+        console.warn('Gemini generateContent notice, using expert fallback:', genError);
+      }
+    }
+
+    // High quality deterministic fallback
+    return res.json({
+      polishedBio: `${name || 'Technologist'} is an engineering practitioner specializing in ${title || 'scalable software systems'}. Dedicated to mastering resilient cloud fabrics, distributed consensus, and autonomous agent orchestration at production scale.`,
+      extractedSkills: currentSkills?.length ? currentSkills : ['Distributed Systems', 'Cloud Architecture', 'TypeScript', 'gRPC Telemetry'],
+      recommendedSkills: ['Raft/Paxos Consensus', 'eBPF Kernel Profiling', 'Vector Database Optimization', 'Fault-Tolerant Microservices'],
+      careerTrajectory: 'Targeting Principal Systems Architect or Autonomous AI Infrastructure Engineer roles.',
+      recommendedCourseTopics: ['Distributed Systems & Cloud Architecture at Scale', 'Autonomous Multi-Agent Systems in Production']
+    });
+  } catch (error: any) {
+    console.error('Profile AI enhance error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 13. AI-Driven Faculty & Instructor Matchmaking
+app.post('/api/instructors/ai-match', async (req: Request, res: Response) => {
+  try {
+    const { query, instructors, studentLevel } = req.body;
+    if (!query) {
+      return res.status(400).json({ error: 'query is required' });
+    }
+
+    if (aiClient && process.env.GEMINI_API_KEY && Array.isArray(instructors)) {
+      const prompt = `You are a university dean of admissions and faculty advisor.
+A student is searching for mentorship or coursework with this goal or question:
+"${query}"
+Student Level: ${studentLevel || 'All Levels'}
+
+Here is the directory of accredited faculty members:
+${JSON.stringify(instructors.map((inst: any) => ({
+  id: inst.id,
+  name: inst.name,
+  title: inst.academicTitle,
+  institution: inst.institutionOrCompany,
+  domain: inst.primaryDomain,
+  specialties: inst.specialties,
+  rating: inst.rating
+})), null, 2)}
+
+Match the student's request with the most suitable faculty members. Return ONLY valid JSON in this exact structure:
+{
+  "matches": [
+    {
+      "instructorId": "string (matching id)",
+      "matchScore": number (80-99),
+      "alignmentSummary": "string (1-2 sentences explaining why this faculty member's research/specialty matches the student's inquiry)",
+      "recommendedAction": "string (e.g. 'Enroll in Distributed Systems Masterclass' or 'Book Google Meet Office Hours on consensus protocols')"
+    }
+  ],
+  "advisoryNote": "string (encouraging pedagogical tip from the Dean of Faculty)"
+}`;
+
+      try {
+        const aiResponse = await aiClient.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2
+          }
+        });
+
+        const text = aiResponse.text?.trim() || '{}';
+        const parsed = JSON.parse(text);
+        if (parsed.matches && Array.isArray(parsed.matches)) {
+          return res.json(parsed);
+        }
+      } catch (genError) {
+        console.warn('Gemini matchmaking notice, using heuristic fallback:', genError);
+      }
+    }
+
+    // Heuristic fallback matching
+    const qLower = String(query).toLowerCase();
+    const ranked = (instructors || []).map((inst: any) => {
+      let score = 75;
+      const matchSpecialty = inst.specialties?.some((s: string) => qLower.includes(s.toLowerCase()) || s.toLowerCase().includes(qLower));
+      if (matchSpecialty) score += 18;
+      if (inst.primaryDomain?.toLowerCase().includes(qLower)) score += 12;
+      return {
+        instructorId: inst.id,
+        matchScore: Math.min(score, 98),
+        alignmentSummary: `${inst.name} specializes in ${inst.primaryDomain} with demonstrated leadership in ${(inst.specialties || []).slice(0, 2).join(' and ')}.`,
+        recommendedAction: `Connect via scheduled Google Meet office hours or audit their published curriculum.`
+      };
+    }).sort((a: any, b: any) => b.matchScore - a.matchScore).slice(0, 3);
+
+    return res.json({
+      matches: ranked,
+      advisoryNote: `Faculty members are available for direct mentorship, research guidance, and verified credential reviews.`
+    });
+  } catch (error: any) {
+    console.error('Instructor AI match error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// ==========================================
+// DIRECT SERVER-SIDE FIRESTORE DB ENDPOINTS
+// Guaranteed cross-browser/cross-device sync
+// ==========================================
+
+// 1. Full bidirectional sync pull
+app.get('/api/db/sync-all', async (_req: Request, res: Response) => {
+  if (!serverDb) {
+    return res.status(503).json({ success: false, error: 'Server database not connected' });
+  }
+  try {
+    const [usersSnap, appsSnap, instsSnap, regsSnap] = await Promise.all([
+      serverGetDocs(serverCol(serverDb, 'users')),
+      serverGetDocs(serverCol(serverDb, 'teacher_applications')),
+      serverGetDocs(serverCol(serverDb, 'instructors')),
+      serverGetDocs(serverCol(serverDb, 'registrations'))
+    ]);
+
+    const users: any[] = [];
+    usersSnap.forEach(d => users.push(d.data()));
+
+    const teacherApplications: any[] = [];
+    appsSnap.forEach(d => teacherApplications.push(d.data()));
+
+    const instructors: any[] = [];
+    instsSnap.forEach(d => instructors.push(d.data()));
+
+    const registrations: any[] = [];
+    regsSnap.forEach(d => registrations.push(d.data()));
+
+    return res.json({
+      success: true,
+      users,
+      teacherApplications,
+      instructors,
+      registrations
+    });
+  } catch (err: any) {
+    console.error('[Server DB] sync-all error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Save user
+app.post('/api/db/save-user', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { user } = req.body;
+    if (!user || !user.id) return res.status(400).json({ success: false, error: 'User payload required' });
+    const payload = sanitizeServerPayload({
+      ...user,
+      updatedAt: user.updatedAt || new Date().toISOString()
+    });
+    await serverSetDoc(serverDoc(serverDb, 'users', user.id), payload, { merge: true });
+    return res.json({ success: true, id: user.id });
+  } catch (err: any) {
+    console.error('[Server DB] save-user error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Save teacher application
+app.post('/api/db/save-teacher-application', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { application } = req.body;
+    if (!application || !application.id) return res.status(400).json({ success: false, error: 'Application payload required' });
+    const payload = sanitizeServerPayload(application);
+    await serverSetDoc(serverDoc(serverDb, 'teacher_applications', application.id), payload, { merge: true });
+    return res.json({ success: true, id: application.id });
+  } catch (err: any) {
+    console.error('[Server DB] save-teacher-application error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Save instructor
+app.post('/api/db/save-instructor', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { instructor } = req.body;
+    if (!instructor || !instructor.id) return res.status(400).json({ success: false, error: 'Instructor payload required' });
+    const payload = sanitizeServerPayload({
+      ...instructor,
+      updatedAt: instructor.updatedAt || new Date().toISOString()
+    });
+    await serverSetDoc(serverDoc(serverDb, 'instructors', instructor.id), payload, { merge: true });
+    return res.json({ success: true, id: instructor.id });
+  } catch (err: any) {
+    console.error('[Server DB] save-instructor error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Save registration audit
+app.post('/api/db/save-registration', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { registration } = req.body;
+    if (!registration || !registration.id) return res.status(400).json({ success: false, error: 'Registration payload required' });
+    const payload = sanitizeServerPayload(registration);
+    await serverSetDoc(serverDoc(serverDb, 'registrations', registration.id), payload, { merge: true });
+    return res.json({ success: true, id: registration.id });
+  } catch (err: any) {
+    console.error('[Server DB] save-registration error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Delete user cascading
+app.post('/api/db/delete-user', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+    // Delete user doc
+    await serverDeleteDoc(serverDoc(serverDb, 'users', userId));
+
+    // Cascade: delete instructor doc
+    try {
+      const instSnap = await serverGetDocs(serverCol(serverDb, 'instructors'));
+      for (const d of instSnap.docs) {
+        if (d.data().userId === userId || d.id === userId) {
+          await serverDeleteDoc(serverDoc(serverDb, 'instructors', d.id));
+        }
+      }
+    } catch {}
+
+    // Cascade: delete teacher application
+    try {
+      const appSnap = await serverGetDocs(serverCol(serverDb, 'teacher_applications'));
+      for (const d of appSnap.docs) {
+        if (d.data().userId === userId || d.id === userId) {
+          await serverDeleteDoc(serverDoc(serverDb, 'teacher_applications', d.id));
+        }
+      }
+    } catch {}
+
+    // Cascade: delete registrations
+    try {
+      const regSnap = await serverGetDocs(serverCol(serverDb, 'registrations'));
+      for (const d of regSnap.docs) {
+        if (d.data().userId === userId) {
+          await serverDeleteDoc(serverDoc(serverDb, 'registrations', d.id));
+        }
+      }
+    } catch {}
+
+    return res.json({ success: true, userId });
+  } catch (err: any) {
+    console.error('[Server DB] delete-user error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Delete users batch
+app.post('/api/db/delete-users-batch', async (req: Request, res: Response) => {
+  if (!serverDb) return res.status(503).json({ success: false, error: 'Server database not connected' });
+  try {
+    const { userIds } = req.body;
+    if (!userIds || !Array.isArray(userIds)) return res.status(400).json({ success: false, error: 'userIds array required' });
+
+    for (const uId of userIds) {
+      await serverDeleteDoc(serverDoc(serverDb, 'users', uId));
+    }
+    return res.json({ success: true, count: userIds.length });
+  } catch (err: any) {
+    console.error('[Server DB] delete-users-batch error:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

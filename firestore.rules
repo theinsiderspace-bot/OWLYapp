@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Connection test document
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // User Profiles Collection: permits reading directory and registering/updating accounts
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isValidId(userId);
+      allow update: if isValidId(userId);
+      allow delete: if isValidId(userId);
+    }
+
+    // Accredited Faculty & Instructor Database
+    match /instructors/{instructorId} {
+      allow read: if true;
+      allow create: if isValidId(instructorId);
+      allow update: if isValidId(instructorId);
+      allow delete: if isValidId(instructorId);
+    }
+
+    // Faculty Accreditation Applications
+    match /teacher_applications/{appId} {
+      allow read: if true;
+      allow create: if isValidId(appId);
+      allow update: if isValidId(appId);
+      allow delete: if isValidId(appId);
+    }
+
+    // Registration Audit Log
+    match /registrations/{registrationId} {
+      allow read: if true;
+      allow create: if isValidId(registrationId);
+      allow update: if isValidId(registrationId);
+      allow delete: if isValidId(registrationId);
+    }
+  }
+}

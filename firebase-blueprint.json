@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role, educational progress, and AI-driven preferences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user identifier", "maxLength": 128 },
+        "name": { "type": "string", "description": "Full name of the user", "maxLength": 120 },
+        "email": { "type": "string", "description": "User email address", "maxLength": 150 },
+        "password": { "type": "string", "description": "User access credential", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["student", "teacher", "admin"], "description": "Access control role" },
+        "avatarText": { "type": "string", "description": "Avatar initials", "maxLength": 6 },
+        "avatarUrl": { "type": "string", "description": "Optional profile picture URL", "maxLength": 500 },
+        "title": { "type": "string", "description": "Professional or academic title", "maxLength": 200 },
+        "bio": { "type": "string", "description": "User biography or mission statement", "maxLength": 2000 },
+        "institutionOrCompany": { "type": "string", "description": "Affiliation", "maxLength": 200 },
+        "skills": { "type": "array", "description": "Technical and domain skills", "items": { "type": "string" } },
+        "learningGoals": { "type": "array", "description": "Active learning objectives", "items": { "type": "string" } },
+        "enrolledCourseIds": { "type": "array", "description": "Course IDs user is enrolled in", "items": { "type": "string" } },
+        "totalSpent": { "type": "number", "description": "Lifetime spending in USD" },
+        "joinedDate": { "type": "string", "description": "Registration date", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status" },
+        "teacherVerificationStatus": { "type": "string", "enum": ["unverified", "pending_approval", "approved", "rejected"], "description": "Faculty accreditation status" },
+        "teacherApplicationId": { "type": "string", "description": "Associated teacher application", "maxLength": 128 },
+        "aiProfileSummary": { "type": "string", "description": "AI-generated profile career summary", "maxLength": 2000 },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update", "maxLength": 50 }
+      },
+      "required": ["id", "name", "email", "role", "avatarText", "status"]
+    },
+    "Instructor": {
+      "title": "Instructor",
+      "description": "Accredited faculty record and database dossier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Instructor database identifier", "maxLength": 128 },
+        "userId": { "type": "string", "description": "Underlying user id", "maxLength": 128 },
+        "name": { "type": "string", "description": "Faculty full name", "maxLength": 120 },
+        "email": { "type": "string", "description": "Faculty email", "maxLength": 150 },
+        "avatarText": { "type": "string", "description": "Avatar initials", "maxLength": 6 },
+        "avatarUrl": { "type": "string", "description": "Avatar photo URL", "maxLength": 500 },
+        "academicTitle": { "type": "string", "description": "Academic or professional title", "maxLength": 200 },
+        "institutionOrCompany": { "type": "string", "description": "University or research laboratory", "maxLength": 200 },
+        "primaryDomain": { "type": "string", "description": "Primary academic domain", "maxLength": 100 },
+        "specialties": { "type": "array", "description": "Areas of research and teaching", "items": { "type": "string" } },
+        "bio": { "type": "string", "description": "Detailed academic biography", "maxLength": 3000 },
+        "credentialsSummary": { "type": "string", "description": "Degrees and credentials", "maxLength": 1500 },
+        "portfolioUrl": { "type": "string", "description": "Portfolio, lab website, or scholar profile", "maxLength": 500 },
+        "verificationStatus": { "type": "string", "enum": ["unverified", "pending_approval", "approved", "rejected"], "description": "Management accreditation status" },
+        "rating": { "type": "number", "description": "Average student evaluation rating" },
+        "reviewCount": { "type": "number", "description": "Number of reviews" },
+        "studentCount": { "type": "number", "description": "Total active students" },
+        "courseIds": { "type": "array", "description": "Courses authored by instructor", "items": { "type": "string" } },
+        "officeHoursSchedule": { "type": "string", "description": "Weekly Google Meet office hours", "maxLength": 300 },
+        "featured": { "type": "boolean", "description": "Flag for featured faculty member" },
+        "hIndex": { "type": "number", "description": "Academic citation h-index" },
+        "publicationsCount": { "type": "number", "description": "Number of peer-reviewed publications" },
+        "joinedDate": { "type": "string", "description": "Date joined faculty", "maxLength": 50 },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "name", "email", "academicTitle", "institutionOrCompany", "primaryDomain", "verificationStatus"]
+    },
+    "TeacherApplication": {
+      "title": "TeacherApplication",
+      "description": "Faculty accreditation application and registration record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Application record ID", "maxLength": 128 },
+        "userId": { "type": "string", "description": "Applicant user identifier", "maxLength": 128 },
+        "applicantName": { "type": "string", "description": "Applicant full name", "maxLength": 120 },
+        "applicantEmail": { "type": "string", "description": "Applicant email", "maxLength": 150 },
+        "academicTitle": { "type": "string", "description": "Professional or academic title", "maxLength": 200 },
+        "institutionOrCompany": { "type": "string", "description": "University, laboratory, or organization", "maxLength": 200 },
+        "primaryDomain": { "type": "string", "description": "Subject matter expertise domain", "maxLength": 100 },
+        "bio": { "type": "string", "description": "Applicant background bio", "maxLength": 3000 },
+        "portfolioUrl": { "type": "string", "description": "Portfolio or scholar profile link", "maxLength": 500 },
+        "credentialsSummary": { "type": "string", "description": "Degrees, publications, or credentials", "maxLength": 2000 },
+        "proposedCourseTopic": { "type": "string", "description": "Proposed masterclass or course topic", "maxLength": 300 },
+        "submittedAt": { "type": "string", "description": "Submission ISO timestamp", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["unverified", "pending_approval", "approved", "rejected"], "description": "Application review status" },
+        "reviewedAt": { "type": "string", "description": "Review ISO timestamp", "maxLength": 50 },
+        "reviewedBy": { "type": "string", "description": "Admin who conducted review", "maxLength": 128 },
+        "reviewNotes": { "type": "string", "description": "Notes from administration review", "maxLength": 2000 }
+      },
+      "required": ["id", "userId", "applicantName", "applicantEmail", "academicTitle", "status", "submittedAt"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Log of user registrations and account activations across the platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Registration audit ID", "maxLength": 128 },
+        "userId": { "type": "string", "description": "Registered user ID", "maxLength": 128 },
+        "userName": { "type": "string", "description": "Full name", "maxLength": 120 },
+        "userEmail": { "type": "string", "description": "Registered email", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["student", "teacher", "admin"], "description": "Registered role" },
+        "registeredAt": { "type": "string", "description": "Registration ISO timestamp", "maxLength": 50 },
+        "registrationType": { "type": "string", "description": "Signup type (student_signup, teacher_application, google_oauth)", "maxLength": 60 }
+      },
+      "required": ["id", "userId", "userName", "userEmail", "role", "registeredAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles, roles, and learning status"
+    },
+    "/instructors/{instructorId}": {
+      "schema": "Instructor",
+      "description": "Directory of accredited faculty and instructor database"
+    },
+    "/teacher_applications/{appId}": {
+      "schema": "TeacherApplication",
+      "description": "Teacher registration applications submitted for administrator governance"
+    },
+    "/registrations/{registrationId}": {
+      "schema": "Registration",
+      "description": "Audit log of all registered users and account creations"
+    }
+  }
+}

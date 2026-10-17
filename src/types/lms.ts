@@ -21,6 +21,14 @@ export interface TeacherApplication {
   reviewNotes?: string;
 }
 
+export interface UserSocialLinks {
+  github?: string;
+  linkedin?: string;
+  twitter?: string;
+  website?: string;
+  googleScholar?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -28,15 +36,58 @@ export interface User {
   password?: string;
   role: UserRole;
   avatarText: string;
+  avatarUrl?: string;
   title?: string;
   bio?: string;
+  institutionOrCompany?: string;
+  skills?: string[];
+  socialLinks?: UserSocialLinks;
+  learningGoals?: string[];
   enrolledCourseIds: string[];
   totalSpent: number;
   joinedDate: string;
   status: 'active' | 'suspended';
   teacherVerificationStatus?: TeacherVerificationStatus;
   teacherApplicationId?: string;
+  aiProfileSummary?: string;
+  recommendedSkills?: string[];
+  updatedAt?: string;
 }
+
+export interface Instructor {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatarText: string;
+  avatarUrl?: string;
+  academicTitle: string;
+  institutionOrCompany: string;
+  primaryDomain: string;
+  specialties: string[];
+  bio: string;
+  credentialsSummary: string;
+  portfolioUrl?: string;
+  verificationStatus: TeacherVerificationStatus;
+  rating: number;
+  reviewCount: number;
+  studentCount: number;
+  courseIds: string[];
+  officeHoursSchedule?: string;
+  featured?: boolean;
+  hIndex?: number;
+  publicationsCount?: number;
+  joinedDate: string;
+  updatedAt?: string;
+}
+
+export interface CloudSyncState {
+  status: 'synced' | 'syncing' | 'offline' | 'error';
+  lastSyncedAt: string | null;
+  pendingMutationsCount: number;
+  error?: string | null;
+}
+
 
 export type CourseLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'All Levels';
 
